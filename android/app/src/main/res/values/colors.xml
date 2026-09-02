@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="launch_sky">#1F4A24</color>
+    <!-- Backdrop behind the launcher/splash art. Matches the darker foliage
+         in Icon.png so any launcher mask blends into the game window. -->
+    <color name="launch_bg">#143018</color>
+</resources>

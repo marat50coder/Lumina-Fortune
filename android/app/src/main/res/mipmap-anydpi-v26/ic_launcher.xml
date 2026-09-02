@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Full-bleed adaptive icon: the whole composed scene is baked into a
+     single edge-to-edge asset that lives in the BACKGROUND layer; the
+     foreground is transparent. The scene sits inside the safe zone of
+     the plate, so every launcher mask (Pixel circle, squircle, teardrop)
+     trims ONLY the surrounding tone — no part of the artwork is clipped.
+     Splash uses the same adaptive-icon in drawable-anydpi-v26/ic_splash_logo.xml. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_art"/>
+    <foreground android:drawable="@android:color/transparent"/>
+</adaptive-icon>
