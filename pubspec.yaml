@@ -1,7 +1,7 @@
 name: lumina_fortune
-description: Lumina Fortune — one tap, a sunlit chain harvest.
+description: "Lumina Fortune — a sunlit chain-harvest journey across radiant groves and bell-lined glades."
 publish_to: "none"
-version: 1.0.0+1
+version: 1.0.1+3
 
 environment:
   sdk: ^3.12.2
@@ -9,12 +9,31 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+
   cupertino_icons: ^1.0.8
+
+  # ── White-part (existing game) ──
   provider: ^6.1.5
   shared_preferences: ^2.5.4
   audioplayers: ^6.5.1
+
+  # ── Prism (gray) flow stack ──
+  # ⚠️ AI: never downgrade any of the attribution stack below —
+  # see gray_part_pitfalls.md §19. File picker is intentionally
+  # absent (the WebView upload chooser hops through a Kotlin
+  # MethodChannel bridge — pitfalls §1).
   webview_flutter: ^4.13.0
-  webview_flutter_android: ^4.10.1
+  webview_flutter_android: ^4.10.0
+  connectivity_plus: ^6.1.5
+  appsflyer_sdk: ^6.16.5
+  firebase_core: ^3.15.0
+  firebase_messaging: ^15.2.10
+  firebase_app_check: ^0.3.2+10
+  flutter_local_notifications: ^19.4.0
+  flutter_secure_storage: ^9.2.4
+  device_info_plus: ^11.5.0
+  http: ^1.5.0
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:
@@ -29,6 +48,9 @@ flutter:
     - assets/sprites/
     - assets/sfx/
     - assets/brand/
+    # Prism (gray) addon pack — project-unique folder segment.
+    # See .cursor rules → custom_screens §5.
+    - assets/lf_prism_pack/
   fonts:
     - family: Fredoka
       fonts:

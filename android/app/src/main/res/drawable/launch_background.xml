@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Pre-Android 12 launch drawable. Just the brand color — no
+    embedded launcher-icon centre. The cold-start flash on the
+    launcher-icon is avoided by matching the launch_bg to the
+    dominant tone of the artwork, so on API < 31 users see a
+    solid dark-forest tile until Flutter's first frame lands.
+    See pitfalls doc §16C.
+-->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@color/launch_sky"/>
+    <item android:drawable="@color/launch_bg"/>
 </layer-list>

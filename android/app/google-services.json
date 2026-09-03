@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "14294274234",
+    "project_id": "lumina-fortune",
+    "storage_bucket": "lumina-fortune.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:14294274234:android:4143e3809d60b3ee483283",
+        "android_client_info": {
+          "package_name": "com.luminafortune.luminagame"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCSdHtWMdBfaaxhj_83TJAJ8MKoRRov9qU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

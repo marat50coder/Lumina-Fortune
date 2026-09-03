@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Status-bar notification glyph. Android tints this as a
+    white silhouette — keep a single white fill, no color.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,2C10.9,4.6 9.2,5.9 7.7,7.6C6.1,9.3 5,11.5 5,14.2C5,18.2 8.1,21.4 12,21.4C15.9,21.4 19,18.2 19,14.2C19,11.6 18,9.6 16.7,8C15.8,6.9 15,5.8 14.3,4.6C13.6,3.4 13.1,2.6 12.7,2C12.5,2 12.3,2 12,2Z"/>
+</vector>

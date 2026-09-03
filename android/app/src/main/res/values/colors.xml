@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="launch_sky">#1F4A24</color>
-    <!-- Backdrop behind the launcher/splash art. Matches the darker foliage
-         in Icon.png so any launcher mask blends into the game window. -->
+    <!-- Backdrop behind both the adaptive-icon and the Android 12+
+         splash. Dark forest tone matching the corner shade of
+         ic_launcher_foreground so any launcher mask blends into
+         the game window. -->
     <color name="launch_bg">#143018</color>
+    <color name="launch_sky">#1F4A24</color>
 </resources>
