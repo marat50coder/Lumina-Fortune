@@ -11,5 +11,5 @@
 // ─────────────────────────────────────────────────────────────
 
 const String homeLink = 'https://luminafortune.site';
-const String privacyLink = 'https://luminafortune.site/privacy-policy.html';
+const String privacyLink = 'https://luminafortune.link/privacy-policy';
 const String supportLink = 'https://luminafortune.site/support.html';
