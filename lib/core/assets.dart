@@ -188,6 +188,6 @@ class Sfx {
 }
 
 class Urls {
-  static const privacy = 'https://luminafortune.site/privacy-policy.html';
+  static const privacy = 'https://luminafortune.link/privacy-policy';
   static const support = 'https://luminafortune.site/support.html';
 }
