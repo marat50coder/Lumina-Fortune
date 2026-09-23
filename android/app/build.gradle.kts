@@ -25,7 +25,7 @@ android {
     defaultConfig {
         applicationId = "com.luminafortune.luminagame"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
