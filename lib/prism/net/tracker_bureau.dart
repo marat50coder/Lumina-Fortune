@@ -18,11 +18,13 @@ class TrackerBureau {
   Map<String, dynamic>? _deepLinkPayload;
   Map<String, dynamic>? _appOpenPayload;
 
-  final Completer<Map<String, dynamic>> _installReady =
+  Completer<Map<String, dynamic>> _installReady =
       Completer<Map<String, dynamic>>();
-  final Completer<void> _deepLinkReady = Completer<void>();
+  Completer<void> _deepLinkReady = Completer<void>();
 
-  bool _started = false;
+  bool _callbacksBound = false;
+  bool _initOk = false;
+  Future<void>? _initInFlight;
 
   /// Fires on every UDL after the first boot POST has finished.
   void Function(Map<String, dynamic> click)? onLateWake;
@@ -30,76 +32,102 @@ class TrackerBureau {
   bool get hasWake =>
       _deepLinkPayload != null && _deepLinkPayload!.isNotEmpty;
 
+  /// Idempotent + retryable. First call constructs the SDK and
+  /// registers callbacks (works offline — Play's Install-Referrer
+  /// broadcast still lands). Subsequent calls retry `initSdk` if
+  /// the previous attempt failed (typical when the first launch
+  /// was offline and the user came back online for the retry).
   Future<void> start() async {
-    if (_started) return;
-    _started = true;
+    if (_initOk) return;
+    return _initInFlight ??= _boot().whenComplete(() {
+      _initInFlight = null;
+    });
+  }
 
+  Future<void> _boot() async {
     final String devKey = PrismSettings.attributionKey;
     if (devKey.isEmpty) {
       _finishInstall(<String, dynamic>{});
       _finishDeepLink();
+      _initOk = true;
       return;
     }
 
-    final AppsFlyerOptions options = AppsFlyerOptions(
-      afDevKey: devKey,
-      appId: PrismSettings.iosNumericId,
-      showDebug: kDebugMode,
-      timeToWaitForATTUserAuthorization: 10,
-    );
-    final AppsflyerSdk sdk = AppsflyerSdk(options);
-    _sdk = sdk;
+    if (!_callbacksBound) {
+      final AppsFlyerOptions options = AppsFlyerOptions(
+        afDevKey: devKey,
+        appId: PrismSettings.iosNumericId,
+        showDebug: kDebugMode,
+        timeToWaitForATTUserAuthorization: 10,
+      );
+      final AppsflyerSdk sdk = AppsflyerSdk(options);
+      _sdk = sdk;
 
-    sdk.onInstallConversionData((dynamic raw) async {
-      final Map<String, dynamic> payload = _flatten(raw);
-      final String? status = payload['af_status']?.toString();
-      // OneLink click already proves a paid/deferred path —
-      // do not stall 9s on a first Organic flicker.
-      if (status == 'Organic' && !hasWake) {
-        await Future<void>.delayed(
-          Duration(seconds: PrismSettings.organicRescueSeconds),
-        );
-        final Map<String, dynamic>? rescued = await _gcdRescue();
-        _installPayload = rescued ?? payload;
-      } else {
-        _installPayload = payload;
-      }
-      _finishInstall(_installPayload ?? <String, dynamic>{});
-    });
+      sdk.onInstallConversionData((dynamic raw) async {
+        final Map<String, dynamic> payload = _flatten(raw);
+        final String? status = payload['af_status']?.toString();
+        // OneLink click already proves a paid/deferred path —
+        // do not stall 9s on a first Organic flicker.
+        if (status == 'Organic' && !hasWake) {
+          await Future<void>.delayed(
+            Duration(seconds: PrismSettings.organicRescueSeconds),
+          );
+          final Map<String, dynamic>? rescued = await _gcdRescue();
+          _installPayload = rescued ?? payload;
+        } else {
+          _installPayload = payload;
+        }
+        _finishInstall(_installPayload ?? <String, dynamic>{});
+      });
 
-    sdk.onAppOpenAttribution((dynamic raw) {
-      _appOpenPayload = _flatten(raw);
-    });
+      sdk.onAppOpenAttribution((dynamic raw) {
+        _appOpenPayload = _flatten(raw);
+      });
 
-    sdk.onDeepLinking((DeepLinkResult result) {
-      final Map<String, dynamic>? click = result.deepLink?.clickEvent;
-      if (click != null && click.isNotEmpty) {
-        _deepLinkPayload = Map<String, dynamic>.from(click);
-        assert(() {
-          // ignore: avoid_print
-          print('[PRISM.BUREAU] udl ${jsonEncode(click)}');
-          return true;
-        }());
+      sdk.onDeepLinking((DeepLinkResult result) {
+        final Map<String, dynamic>? click = result.deepLink?.clickEvent;
+        if (click != null && click.isNotEmpty) {
+          _deepLinkPayload = Map<String, dynamic>.from(click);
+          assert(() {
+            // ignore: avoid_print
+            print('[PRISM.BUREAU] udl ${jsonEncode(click)}');
+            return true;
+          }());
+          _finishDeepLink();
+          onLateWake?.call(_deepLinkPayload!);
+          return;
+        }
         _finishDeepLink();
-        onLateWake?.call(_deepLinkPayload!);
-        return;
-      }
-      _finishDeepLink();
-    });
+      });
+      _callbacksBound = true;
+    }
+
+    // Rearm completers if a previous offline boot completed them
+    // with empty payloads — otherwise `awaitSignals` on the
+    // online retry returns immediately with organic-looking data.
+    if (_installReady.isCompleted && (_installPayload == null ||
+        _installPayload!.isEmpty)) {
+      _installReady = Completer<Map<String, dynamic>>();
+    }
+    if (_deepLinkReady.isCompleted && !hasWake) {
+      _deepLinkReady = Completer<void>();
+    }
 
     try {
-      await sdk
+      await _sdk!
           .initSdk(
             registerConversionDataCallback: true,
             registerOnAppOpenAttributionCallback: true,
             registerOnDeepLinkingCallback: true,
           )
           .timeout(const Duration(seconds: 8));
+      _initOk = true;
       // Consume the Activity intent that opened the app (OneLink).
       recheckDeepLink();
     } catch (_) {
-      _finishInstall(<String, dynamic>{});
-      _finishDeepLink();
+      // Leave completers alone. The dispatcher's awaitSignals has
+      // its own bounded timeout, and the next start() call (after
+      // the user retries) will re-run initSdk on the same SDK.
     }
   }
 

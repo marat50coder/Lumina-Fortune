@@ -30,8 +30,11 @@ abstract final class PrismSettings {
   // ranges documented in .cursor rules → relay_forge §1.
 
   /// Snooze after a "Skip" tap on the push-invite screen.
-  /// Range 172_800..604_800. Picked: ≈ 3 d 4 h.
-  static const int inviteSnoozeSeconds = 273_600;
+  /// Range 172_800..604_800. Picked: 2 d 22 h — QA reported the
+  /// previous 3 d 4 h value surfaced the invite on day 4 instead
+  /// of day 3, so this shaves 6 h to guarantee a same-third-day
+  /// re-prompt across time zones (2*86_400 + 22*3_600 = 252_000).
+  static const int inviteSnoozeSeconds = 252_000;
 
   /// Delay before rescuing an initial `af_status: Organic`.
   /// Range 4..12 s.

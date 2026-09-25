@@ -24,6 +24,25 @@ class InviteScreen extends StatefulWidget {
 
 class _InviteScreenState extends State<InviteScreen> {
   bool _busy = false;
+  bool _preloadedBoth = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_preloadedBoth) return;
+    _preloadedBoth = true;
+    // Preload BOTH orientation backgrounds so the swap on
+    // rotation is instant (otherwise the OS shows a blank frame
+    // while the other WebP decodes).
+    precacheImage(
+      const AssetImage('assets/lf_prism_pack/invite_portrait.webp'),
+      context,
+    );
+    precacheImage(
+      const AssetImage('assets/lf_prism_pack/invite_landscape.webp'),
+      context,
+    );
+  }
 
   Future<void> _accept() async {
     if (_busy) return;
@@ -60,70 +79,92 @@ class _InviteScreenState extends State<InviteScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final MediaQueryData mq = MediaQuery.of(context);
-    final Size size = mq.size;
-    final bool landscape = mq.orientation == Orientation.landscape;
-    final String bg = landscape
-        ? 'assets/lf_prism_pack/invite_landscape.webp'
-        : 'assets/lf_prism_pack/invite_portrait.webp';
-
-    // Same pill for both actions. Landscape sits them on one
-    // row at the Skip-button height (Ocean Fortune layout).
-    final double btnW = landscape
-        ? size.width * 0.28
-        : (size.width * 0.70).clamp(220.0, 360.0);
-    final double btnH = landscape ? 48.0 : 56.0;
-
-    final Widget accept = GlowButton(
-      text: 'Accept',
-      icon: Icons.local_fire_department_rounded,
-      compact: landscape,
-      width: btnW,
-      height: btnH,
-      onPress: _accept,
-    );
-    final Widget skip = LeafButton(
-      text: 'Skip',
-      compact: landscape,
-      width: btnW,
-      height: btnH,
-      onPress: _skip,
-    );
-
+    // OrientationBuilder + LayoutBuilder gives us a fresh box on
+    // rotation without an intermediate stretched frame. Both
+    // backgrounds are precached, and the layout swaps via
+    // AnimatedSwitcher so the buttons never mid-fly between
+    // absolute positions.
     return Scaffold(
       backgroundColor: const Color(0xFF0F1F0F),
-      body: Stack(
-        fit: StackFit.expand,
-        children: <Widget>[
-          Image.asset(
-            bg,
-            fit: BoxFit.cover,
-            width: size.width,
-            height: size.height,
-          ),
-          Positioned(
-            left: size.width * 0.08,
-            right: size.width * 0.08,
-            bottom: size.height * (landscape ? 0.07 : 0.09),
-            child: landscape
-                ? Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      accept,
-                      const SizedBox(width: 16),
-                      skip,
-                    ],
-                  )
-                : Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      accept,
-                      const SizedBox(height: 16),
-                      skip,
-                    ],
+      body: OrientationBuilder(
+        builder: (BuildContext ctx, Orientation orientation) {
+          final bool landscape = orientation == Orientation.landscape;
+          return LayoutBuilder(
+            builder: (BuildContext ctx, BoxConstraints c) {
+              final double w = c.maxWidth;
+              final double h = c.maxHeight;
+              final String bg = landscape
+                  ? 'assets/lf_prism_pack/invite_landscape.webp'
+                  : 'assets/lf_prism_pack/invite_portrait.webp';
+
+              final double btnW = landscape
+                  ? w * 0.28
+                  : (w * 0.70).clamp(220.0, 360.0);
+              final double btnH = landscape ? 48.0 : 56.0;
+
+              final Widget accept = GlowButton(
+                text: 'Accept',
+                icon: Icons.local_fire_department_rounded,
+                compact: landscape,
+                width: btnW,
+                height: btnH,
+                onPress: _accept,
+              );
+              final Widget skip = LeafButton(
+                text: 'Skip',
+                compact: landscape,
+                width: btnW,
+                height: btnH,
+                onPress: _skip,
+              );
+
+              return Stack(
+                key: ValueKey<bool>(landscape),
+                fit: StackFit.expand,
+                children: <Widget>[
+                  Image.asset(
+                    bg,
+                    key: ValueKey<String>(bg),
+                    fit: BoxFit.cover,
+                    width: w,
+                    height: h,
+                    gaplessPlayback: true,
+                    filterQuality: FilterQuality.medium,
                   ),
-          ),
-        ],
+                  Positioned(
+                    left: w * 0.08,
+                    right: w * 0.08,
+                    bottom: h * (landscape ? 0.07 : 0.09),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      switchInCurve: Curves.easeOut,
+                      switchOutCurve: Curves.easeIn,
+                      child: landscape
+                          ? Row(
+                              key: const ValueKey<String>('land-row'),
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: <Widget>[
+                                accept,
+                                const SizedBox(width: 16),
+                                skip,
+                              ],
+                            )
+                          : Column(
+                              key: const ValueKey<String>('port-col'),
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                accept,
+                                const SizedBox(height: 16),
+                                skip,
+                              ],
+                            ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
       ),
     );
   }

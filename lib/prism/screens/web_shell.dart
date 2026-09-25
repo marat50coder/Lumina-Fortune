@@ -59,7 +59,10 @@ class _WebShellState extends State<WebShell>
   String? _lastMainFrame;
   int _redirectRetries = 0;
   Timer? _dropTimer;
+  Timer? _rotateVeilTimer;
   StreamSubscription<List<ConnectivityResult>>? _connSub;
+  Orientation? _lastOrientation;
+  bool _rotating = false;
 
   // Rotate per project. Same string in MainActivity.kt.
   static const MethodChannel _uploadBridge =
@@ -291,6 +294,7 @@ class _WebShellState extends State<WebShell>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _dropTimer?.cancel();
+    _rotateVeilTimer?.cancel();
     _connSub?.cancel();
     unawaited(_setImeOverlay(false));
     widget.pushGate.onWarmUrl = null;
@@ -301,22 +305,26 @@ class _WebShellState extends State<WebShell>
     super.dispose();
   }
 
+  void _onOrientationChange(Orientation next) {
+    if (_lastOrientation == null) {
+      _lastOrientation = next;
+      return;
+    }
+    if (_lastOrientation == next) return;
+    _lastOrientation = next;
+    // The Android WebView surface briefly stretches while it
+    // reflows to the new size. Cover the transition with a
+    // matching-black veil so the user never sees the smeared
+    // frame; drop the veil once the native surface has settled.
+    if (mounted) setState(() => _rotating = true);
+    _rotateVeilTimer?.cancel();
+    _rotateVeilTimer = Timer(const Duration(milliseconds: 320), () {
+      if (mounted) setState(() => _rotating = false);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final MediaQueryData mq = MediaQuery.of(context);
-    final bool landscape = mq.orientation == Orientation.landscape;
-
-    // Landscape-aware safe padding for the cutout on both long
-    // edges (pitfalls §14). We DO NOT wrap in SafeArea — the JS
-    // enhancer covers the site-side inset via CSS variables.
-    final EdgeInsets safe = landscape
-        ? EdgeInsets.only(
-            left: mq.viewPadding.left,
-            right: mq.viewPadding.right,
-            top: mq.viewPadding.top,
-          )
-        : EdgeInsets.only(top: mq.viewPadding.top);
-
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (bool didPop, _) async {
@@ -325,25 +333,54 @@ class _WebShellState extends State<WebShell>
       child: Scaffold(
         backgroundColor: Colors.black,
         resizeToAvoidBottomInset: false,
-        body: Stack(
-          fit: StackFit.expand,
-          children: <Widget>[
-            Padding(
-              padding: safe,
-              child: WebViewWidget(controller: _wv),
-            ),
-            if (_spinner)
-              const ColoredBox(
-                color: Color(0x66000000),
-                child: Center(
-                  child: CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Color(0xFFF5C542),
+        body: OrientationBuilder(
+          builder: (BuildContext ctx, Orientation orientation) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _onOrientationChange(orientation);
+            });
+            // No manual padding — the JS enhancer neutralises the
+            // site-side safe-area vars, and SafeArea would just
+            // add a second inset that jitters on rotation. The
+            // WebView paints edge-to-edge on a black surface, so
+            // the native surface never shows a white stretch.
+            return Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                const ColoredBox(color: Colors.black),
+                WebViewWidget(controller: _wv),
+                AnimatedOpacity(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOut,
+                  opacity: _rotating ? 1.0 : 0.0,
+                  child: IgnorePointer(
+                    ignoring: !_rotating,
+                    child: const ColoredBox(
+                      color: Colors.black,
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.4,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Color(0xFFF5C542),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-          ],
+                if (_spinner)
+                  const ColoredBox(
+                    color: Color(0x66000000),
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Color(0xFFF5C542),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );

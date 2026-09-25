@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 
 import '../sealed_bytes.dart';
-import '../settings.dart';
 
 // ─────────────────────────────────────────────────────────────
 // UA FORGER — assembles a real-device User-Agent
@@ -81,21 +80,16 @@ class UaForger {
     final String chromeLbl = _pick(unsealUaChromeLabel(), _seedChromeLbl);
     final String safariLbl = _pick(unsealUaMobileSafari(), _seedSafariLbl);
 
-    final String base = '$product $linuxOpen $release; $brand $model'
+    // Partner review flagged the `appid/…` + `appname/…` tail as a
+    // synthetic fingerprint (real Chrome never emits those tokens),
+    // so the identity suffix is intentionally omitted. Keep the UA
+    // as the plain Chrome-on-Android string only. If the partner
+    // ever asks for the suffix back, re-thread it here (sealed).
+    return '$product $linuxOpen $release; $brand $model'
         '$buildLbl$buildTag$buildCls'
         '$engineLbl$webkit$engineTail'
         '$chromeLbl$chrome'
         '$safariLbl$webkit';
-
-    // Identity suffix — sealed. If tokens aren't packed yet the
-    // base UA is returned as-is (safe for QA before the operator
-    // has run the packer with a partner-approved decision).
-    final String idTok = unsealUaAppIdToken();
-    if (idTok.isEmpty) return base;
-    final String nameTok = unsealUaAppNameToken();
-    final String appName = unsealAppNameToken();
-    return '$base $idTok${PrismSettings.bundleId} '
-        '$nameTok$appName';
   }
 
   // ── iOS assembly (cross-project safety) ──────────────────

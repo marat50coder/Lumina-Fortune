@@ -105,6 +105,12 @@ class PrismDispatcher {
       return const NoLinkRoute(canFallToGame: false);
     }
     progress(0.32);
+    // Prime AppsFlyer BEFORE gating on network. The Google Play
+    // Install-Referrer broadcast still lands offline; the SDK
+    // captures + queues it, and when the user retries with the
+    // network back up, the stored referrer delivers real
+    // attribution instead of a stale organic fallback.
+    unawaited(bureau.start());
     try {
       await pushGate.ignite().timeout(const Duration(seconds: 5));
     } catch (_) {}
@@ -112,6 +118,9 @@ class PrismDispatcher {
       return const NoLinkRoute(canFallToGame: false);
     }
     progress(0.48);
+    // Retry-safe: `start()` short-circuits when init already
+    // succeeded, otherwise it re-runs `initSdk` on the same SDK
+    // instance with the network now available.
     try {
       await bureau.start().timeout(const Duration(seconds: 8));
     } catch (_) {}
