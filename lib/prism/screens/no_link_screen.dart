@@ -54,11 +54,24 @@ class _NoLinkScreenState extends State<NoLinkScreen> {
   }
 
   Future<void> _autoResume() async {
+    // A single connectivity event fires the instant the OS notices
+    // an adapter transitioned to CONNECTED, but DNS + the routing
+    // table often take another second or two to settle. Rushing
+    // the retry here surfaces a second NoLink after the retry's
+    // own DNS probe fails, which reads as "shown twice" to the
+    // user. Wait long enough for the network to actually reach
+    // the internet before we hand control back to the dispatcher.
     try {
       final bool up = await LinkGauge()
           .hasAdapter()
-          .timeout(const Duration(milliseconds: 800));
-      if (up) await _retry();
+          .timeout(const Duration(milliseconds: 1600));
+      if (!up) return;
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      if (!mounted) return;
+      final bool reachable = await LinkGauge()
+          .canReach()
+          .timeout(const Duration(seconds: 6), onTimeout: () => false);
+      if (reachable && mounted) await _retry();
     } catch (_) {}
   }
 

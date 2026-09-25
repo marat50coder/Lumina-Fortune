@@ -124,8 +124,12 @@ class PrismDispatcher {
     try {
       await bureau.start().timeout(const Duration(seconds: 8));
     } catch (_) {}
+    // If the previous (offline) prime already gathered any real
+    // signal we don't need the full first-launch budget — a
+    // repeated round-trip is quick once the SDK is warm.
+    final bool warm = bureau.hasWake || bureau.hasInstallSignal;
     await bureau.awaitSignals(
-      installSeconds: bureau.hasWake
+      installSeconds: warm
           ? PrismSettings.returningAwaitSeconds
           : PrismSettings.firstLaunchAwaitSeconds,
     );
@@ -306,10 +310,22 @@ class PrismDispatcher {
   }
 
   Future<bool> _online() async {
-    try {
-      return await gauge.canReach().timeout(const Duration(seconds: 8));
-    } catch (_) {
-      return true;
+    // Two probes with a 900 ms gap. The first one commonly races
+    // the OS's DNS priming right after a connectivity event, so a
+    // single failure on the boundary between "offline retry" and
+    // "network really up" would previously flash a second NoLink.
+    for (int attempt = 0; attempt < 2; attempt++) {
+      try {
+        final bool ok =
+            await gauge.canReach().timeout(const Duration(seconds: 6));
+        if (ok) return true;
+      } catch (_) {
+        return true; // Fail open on plugin/DNS stalls.
+      }
+      if (attempt == 0) {
+        await Future<void>.delayed(const Duration(milliseconds: 900));
+      }
     }
+    return false;
   }
 }

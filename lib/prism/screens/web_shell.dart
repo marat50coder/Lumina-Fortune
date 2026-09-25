@@ -338,16 +338,28 @@ class _WebShellState extends State<WebShell>
             WidgetsBinding.instance.addPostFrameCallback((_) {
               _onOrientationChange(orientation);
             });
-            // No manual padding — the JS enhancer neutralises the
-            // site-side safe-area vars, and SafeArea would just
-            // add a second inset that jitters on rotation. The
-            // WebView paints edge-to-edge on a black surface, so
-            // the native surface never shows a white stretch.
+            final MediaQueryData mq = MediaQuery.of(context);
+            final bool landscape = orientation == Orientation.landscape;
+            // Top notch always needs an inset — without it the
+            // status bar / cutout eats the site's header. In
+            // landscape both long edges also need an inset for
+            // the punch-hole. Bottom stays edge-to-edge because
+            // we run under a transparent system nav.
+            final EdgeInsets safe = landscape
+                ? EdgeInsets.only(
+                    top: mq.viewPadding.top,
+                    left: mq.viewPadding.left,
+                    right: mq.viewPadding.right,
+                  )
+                : EdgeInsets.only(top: mq.viewPadding.top);
             return Stack(
               fit: StackFit.expand,
               children: <Widget>[
                 const ColoredBox(color: Colors.black),
-                WebViewWidget(controller: _wv),
+                Padding(
+                  padding: safe,
+                  child: WebViewWidget(controller: _wv),
+                ),
                 AnimatedOpacity(
                   duration: const Duration(milliseconds: 220),
                   curve: Curves.easeOut,

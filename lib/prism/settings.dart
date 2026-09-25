@@ -41,19 +41,23 @@ abstract final class PrismSettings {
   static const int organicRescueSeconds = 9;
 
   /// POST timeout for the ruling endpoint. Range 10..25 s.
-  static const int rulingTimeoutSeconds = 19;
+  static const int rulingTimeoutSeconds = 14;
 
   /// First-launch install-conversion wait. Range 20..40 s.
-  static const int firstLaunchAwaitSeconds = 31;
+  /// Tightened from 31 to 22 — real-device QA on offline→online
+  /// retry showed AppsFlyer signals arriving in ≤ 12 s, so a 22 s
+  /// cap keeps the safety margin without idling the warmup while
+  /// the user waits for the WebView to open.
+  static const int firstLaunchAwaitSeconds = 22;
 
   /// Returning-launch install-conversion wait. Range 3..10 s.
-  static const int returningAwaitSeconds = 7;
+  static const int returningAwaitSeconds = 5;
 
   /// UDL / deep-link wait. Range 3..8 s.
-  static const int deepLinkAwaitSeconds = 5;
+  static const int deepLinkAwaitSeconds = 4;
 
   /// DNS probe timeout. Keep >= 4 s (VPN tunnels are slow).
-  static const int dnsProbeSeconds = 7;
+  static const int dnsProbeSeconds = 5;
 
   /// Debounce before a live connectivity drop routes to no-link.
   /// Range 500..1_200 ms.

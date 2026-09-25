@@ -33,6 +33,13 @@ class TrackerBureau {
   bool get hasWake =>
       _deepLinkPayload != null && _deepLinkPayload!.isNotEmpty;
 
+  /// True once AppsFlyer has ever delivered a non-empty install
+  /// conversion payload. Lets the dispatcher fall back to the
+  /// short `returningAwaitSeconds` cap on an offline→online
+  /// retry where the SDK was primed on the previous attempt.
+  bool get hasInstallSignal =>
+      _installPayload != null && _installPayload!.isNotEmpty;
+
   /// Scans the last UDL payload for anything that decodes to a
   /// full `http(s)://` URL — checks `deep_link_value`, `af_dp`,
   /// `af_web_dp`, `url`, `deep_link*`, `target`, `landing`, and
