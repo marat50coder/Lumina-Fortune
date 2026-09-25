@@ -4,6 +4,6 @@
          splash. Dark forest tone matching the corner shade of
          ic_launcher_foreground so any launcher mask blends into
          the game window. -->
-    <color name="launch_bg">#143018</color>
+    <color name="launch_bg">#0B0E05</color>
     <color name="launch_sky">#1F4A24</color>
 </resources>

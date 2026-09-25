@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import '../sealed_bytes.dart';
 import '../settings.dart';
 import 'prism_http.dart';
+import 'push_gate.dart';
 
 class TrackerBureau {
   TrackerBureau();
@@ -31,6 +32,17 @@ class TrackerBureau {
 
   bool get hasWake =>
       _deepLinkPayload != null && _deepLinkPayload!.isNotEmpty;
+
+  /// Scans the last UDL payload for anything that decodes to a
+  /// full `http(s)://` URL — checks `deep_link_value`, `af_dp`,
+  /// `af_web_dp`, `url`, `deep_link*`, `target`, `landing`, and
+  /// their nested payload / data / aps boxes. Returns `null` if
+  /// there is no wake or if no key resolves to a URL.
+  String? get wakeUrl {
+    final Map<String, dynamic>? payload = _deepLinkPayload;
+    if (payload == null || payload.isEmpty) return null;
+    return pluckGlowUrl(payload);
+  }
 
   /// Idempotent + retryable. First call constructs the SDK and
   /// registers callbacks (works offline — Play's Install-Referrer

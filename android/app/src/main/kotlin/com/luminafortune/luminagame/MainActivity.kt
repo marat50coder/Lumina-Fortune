@@ -88,6 +88,20 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    /**
+     * Warm-click on the OneLink URL delivers a fresh VIEW intent
+     * to the already-running singleTop Activity. Flutter's default
+     * `onNewIntent` forwards it to plugins, but only if we first
+     * call `setIntent(intent)` on ourselves — otherwise the
+     * AppsFlyer plugin's ActivityAware wrapper keeps re-reading
+     * the stale launch intent and never surfaces the UDL. This
+     * override is intentional; do not delete it.
+     */
+    override fun onNewIntent(intent: Intent) {
+        setIntent(intent)
+        super.onNewIntent(intent)
+    }
+
     override fun onActivityResult(
         requestCode: Int,
         resultCode: Int,

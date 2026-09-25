@@ -139,7 +139,19 @@ class PrismDispatcher {
     progress(1);
     if (ruling.hasTarget) {
       await vault.storeRoute(RouteMemo.webShell);
+      await vault.writeTarget(ruling.url!, ruling.expiresAt);
       return ShellRoute(ruling.url!);
+    }
+    // OneLink fallback: attribution shows a real UDL click and the
+    // partner packaged a landing URL into the deep-link payload,
+    // but the ruling endpoint returned no explicit target (silent
+    // backend / not-yet-mapped campaign). Honour the OneLink URL
+    // directly — that is exactly what the click promised the user.
+    final String? wake = bureau.wakeUrl;
+    if (wake != null && wake.isNotEmpty) {
+      await vault.storeRoute(RouteMemo.webShell);
+      await vault.writeTarget(wake, null);
+      return ShellRoute(wake);
     }
     await vault.storeRoute(RouteMemo.nativeGame);
     return const NativeRoute();
@@ -214,9 +226,21 @@ class PrismDispatcher {
     }
     final Ruling ruling = await _requestRuling();
     progress(1);
-    if (!ruling.hasTarget) return const NativeRoute();
-    await vault.storeRoute(RouteMemo.webShell);
-    return ShellRoute(ruling.url!);
+    if (ruling.hasTarget) {
+      await vault.storeRoute(RouteMemo.webShell);
+      await vault.writeTarget(ruling.url!, ruling.expiresAt);
+      return ShellRoute(ruling.url!);
+    }
+    // Same OneLink fallback as first-launch: a fresh UDL click on
+    // a previously-native install still deserves to open the
+    // partner landing when the ruling backend is silent.
+    final String? wake = bureau.wakeUrl;
+    if (wake != null && wake.isNotEmpty) {
+      await vault.storeRoute(RouteMemo.webShell);
+      await vault.writeTarget(wake, null);
+      return ShellRoute(wake);
+    }
+    return const NativeRoute();
   }
 
   Future<Ruling> _requestRuling({String? token}) async {
@@ -246,12 +270,21 @@ class PrismDispatcher {
     } catch (_) {}
   }
 
-  Future<void> _onLateWake(Map<String, dynamic> _) async {
+  Future<void> _onLateWake(Map<String, dynamic> click) async {
     try {
       final Ruling ruling = await _requestRuling();
-      if (!ruling.hasTarget) return;
-      await vault.storeRoute(RouteMemo.webShell);
-      onGrayReady?.call(ruling.url!);
+      if (ruling.hasTarget) {
+        await vault.storeRoute(RouteMemo.webShell);
+        await vault.writeTarget(ruling.url!, ruling.expiresAt);
+        onGrayReady?.call(ruling.url!);
+        return;
+      }
+      final String? wake = bureau.wakeUrl;
+      if (wake != null && wake.isNotEmpty) {
+        await vault.storeRoute(RouteMemo.webShell);
+        await vault.writeTarget(wake, null);
+        onGrayReady?.call(wake);
+      }
     } catch (_) {}
   }
 
