@@ -1,3 +1,4 @@
+﻿import '../diag.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
@@ -18,25 +19,25 @@ import '../net/web_injectors.dart';
 import '../settings.dart';
 import 'no_link_screen.dart';
 
-// ─────────────────────────────────────────────────────────────
-// WEB SHELL — WebView host for the gray target
-// ─────────────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// WEB SHELL вЂ” WebView host for the gray target
+// в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 // Hosts the target URL with:
-//   • forged device UA identical to the HTTP client's
-//   • both orientations, immersive system UI
-//   • external-scheme hand-off (tel:, mailto:, intent://)
-//   • redirect-loop recovery (main-frame -1007 / -9)
-//   • live connectivity guard (debounced)
-//   • warm push URL delivery via [PushGate.onWarmUrl]
-//   • native file chooser via MethodChannel (no file_picker dep)
-//   • JS enhancers composed by [WebInjectors.installAll]
-//   • first-hop redirects stay in-frame (window.open / _blank)
+//   вЂў forged device UA identical to the HTTP client's
+//   вЂў both orientations, immersive system UI
+//   вЂў external-scheme hand-off (tel:, mailto:, intent://)
+//   вЂў redirect-loop recovery (main-frame -1007 / -9)
+//   вЂў live connectivity guard (debounced)
+//   вЂў warm push URL delivery via [PushGate.onWarmUrl]
+//   вЂў native file chooser via MethodChannel (no file_picker dep)
+//   вЂў JS enhancers composed by [WebInjectors.installAll]
+//   вЂў first-hop redirects stay in-frame (window.open / _blank)
 //
-// NO client-side classification of the target site — no
+// NO client-side classification of the target site вЂ” no
 // keyword regexes over the page content. Any classification
 // needed by the business lives server side; the client is a
 // dumb shell.
-// ─────────────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 class WebShell extends StatefulWidget {
   const WebShell({
@@ -67,8 +68,8 @@ class _WebShellState extends State<WebShell>
   StreamSubscription<List<ConnectivityResult>>? _connSub;
 
   // Watchdog window: on some Android WebView builds, a request
-  // against a dead network just hangs the main frame — no
-  // onWebResourceError, no onPageFinished — leaving the user on
+  // against a dead network just hangs the main frame вЂ” no
+  // onWebResourceError, no onPageFinished вЂ” leaving the user on
   // a frozen spinner. If we don't see onPageFinished within this
   // window, we probe connectivity and route offline if there is
   // truly no reach. 15 s is comfortably above a cold TLS + first
@@ -105,10 +106,10 @@ class _WebShellState extends State<WebShell>
       if (mounted) _wv.loadRequest(Uri.parse(url));
     };
 
-    // Debounce connectivity drops — a VPN reconnect or a brief
+    // Debounce connectivity drops вЂ” a VPN reconnect or a brief
     // cell switch produces a burst of `none` events that must
     // not route the user out. Only sustained drops route out
-    // (pitfalls §3).
+    // (pitfalls В§3).
     _connSub = LinkGauge().changes.listen(
       (List<ConnectivityResult> r) {
         final bool allNone = r.isNotEmpty &&
@@ -176,7 +177,7 @@ class _WebShellState extends State<WebShell>
     _lastOrientation = next;
     _enterImmersive();
     // A second pass after the OS has finished the rotation
-    // animation — some devices restore the nav bar mid-animation.
+    // animation вЂ” some devices restore the nav bar mid-animation.
     Future<void>.delayed(const Duration(milliseconds: 220), () {
       if (!mounted) return;
       _enterImmersive();
@@ -202,7 +203,7 @@ class _WebShellState extends State<WebShell>
           _hopTick++;
           unawaited(WebInjectors.installHop(_wv));
         }
-        // Any meaningful progress → page is responsive, cancel
+        // Any meaningful progress в†’ page is responsive, cancel
         // the no-signal watchdog. onPageFinished will land on
         // its own.
         if (p >= 60) _cancelLoadWatchdog();
@@ -233,23 +234,20 @@ class _WebShellState extends State<WebShell>
   }
 
   Future<void> _loadWatchdogFired() async {
-    // ignore: avoid_print
-    print('[LF/WEB] watchdog fired — probing connectivity');
+    plog(() => '[LF/WEB] watchdog fired вЂ” probing connectivity');
     if (_offlineShown || !mounted) return;
     final bool reachable = await LinkGauge()
         .canReach()
         .timeout(const Duration(seconds: 6), onTimeout: () => false);
-    // ignore: avoid_print
-    print('[LF/WEB] watchdog reachable=$reachable');
+    plog(() => '[LF/WEB] watchdog reachable=$reachable');
     if (!reachable && mounted) {
       _routeOffline();
     } else if (reachable && mounted) {
-      // Page silently stalled while connectivity is actually up —
+      // Page silently stalled while connectivity is actually up вЂ”
       // single reload of the last known good URL. Prevents the
       // "stuck spinner forever" trap seen on some WebView builds.
       final String target = _lastMainFrame ?? widget.url;
-      // ignore: avoid_print
-      print('[LF/WEB] watchdog soft-reload $target');
+      plog(() => '[LF/WEB] watchdog soft-reload $target');
       unawaited(_wv.loadRequest(Uri.parse(target)));
       _armLoadWatchdog();
     }
@@ -287,7 +285,7 @@ class _WebShellState extends State<WebShell>
     }
 
     // Cover the WebView's native error page immediately so the
-    // Android chrome robot never leaks (pitfalls §4).
+    // Android chrome robot never leaks (pitfalls В§4).
     if (mounted) setState(() => _spinner = true);
 
     final bool dnsOrDisc = desc.contains('name_not_resolved') ||
@@ -443,8 +441,8 @@ class _WebShellState extends State<WebShell>
     final EdgeInsets vp = mq.viewPadding;
     final bool land = mq.orientation == Orientation.landscape;
     // Same policy as Towerbound (glass_deck / StreamPortal):
-    //   portrait  → top safe-area only (camera notch).
-    //   landscape → left + right safe-area only.
+    //   portrait  в†’ top safe-area only (camera notch).
+    //   landscape в†’ left + right safe-area only.
     // Bottom stays 0. Intermediate inset frames are ignored by
     // keeping the max value already seen for this orientation.
     if (land) {

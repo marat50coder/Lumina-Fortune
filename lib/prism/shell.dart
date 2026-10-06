@@ -1,3 +1,4 @@
+﻿import 'diag.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -72,14 +73,13 @@ class _LuminaShellState extends State<LuminaShell>
     if (!widget.vault.shouldShowInvite) return;
     final NavigatorState? nav = _nav.currentState;
     if (nav == null) return;
-    // Only interrupt the shell path — never the native game or
+    // Only interrupt the shell path вЂ” never the native game or
     // the warmup / no-link screens.
     final String? targetUrl = await _peekActiveShellUrl();
     if (targetUrl == null || targetUrl.isEmpty) return;
     if (!mounted) return;
     _openingGray = true;
-    // ignore: avoid_print
-    print('[LF/INVITE] resume.reopen target=$targetUrl');
+    plog(() => '[LF/INVITE] resume.reopen target=$targetUrl');
     nav.pushAndRemoveUntil(
       MaterialPageRoute<void>(
         builder: (_) => InviteScreen(
@@ -94,7 +94,7 @@ class _LuminaShellState extends State<LuminaShell>
   }
 
   /// Returns the URL the user should return to AFTER seeing the
-  /// invite again — i.e. the current shell target. `null` when
+  /// invite again вЂ” i.e. the current shell target. `null` when
   /// there is no shell to bounce back to (native game path).
   Future<String?> _peekActiveShellUrl() async {
     final String? cached = await widget.vault.cachedTarget();

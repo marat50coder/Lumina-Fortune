@@ -1,3 +1,4 @@
+﻿import '../diag.dart';
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -11,16 +12,16 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'local_vault.dart';
 import 'prism_http.dart';
 
-// ─────────────────────────────────────────────────────────────
-// PUSH GATE — Firebase Messaging + local notifications
-// ─────────────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// PUSH GATE вЂ” Firebase Messaging + local notifications
+// в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 // Cold-start taps are parked in the vault inside [ignite] BEFORE
 // the dispatcher reads them. Reading the vault first would replay
 // a stale URL from a previous notification.
 //
 // Each tray entry uses a unique id (FCM messageId, else a clock
 // stamp) so two pushes never overwrite each other.
-// ─────────────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 const String kPushChannelId = 'lf_glow_stream';
 const String kPushChannelName = 'Glow updates';
@@ -229,47 +230,42 @@ class PushGate {
   }
 
   Future<void> _ignite() async {
-    // ignore: avoid_print
-    print('[LF/PUSH] ignite.start');
+    plog(() => '[LF/PUSH] ignite.start');
     try {
       if (Firebase.apps.isEmpty) {
         await Firebase.initializeApp();
       }
       _fm = FirebaseMessaging.instance;
-      // Fast listener wiring — these just register Dart callbacks
+      // Fast listener wiring вЂ” these just register Dart callbacks
       // with the native side, no I/O.
       FirebaseMessaging.onMessage.listen((RemoteMessage m) {
-        // ignore: avoid_print
-        print('[LF/PUSH] foreground id=${m.messageId} '
+        plog(() => '[LF/PUSH] foreground id=${m.messageId} '
             'notif=${m.notification?.title} data=${m.data}');
         _onForeground(m);
       });
       FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage m) {
-        // ignore: avoid_print
-        print('[LF/PUSH] warmTap id=${m.messageId} data=${m.data}');
+        plog(() => '[LF/PUSH] warmTap id=${m.messageId} data=${m.data}');
         _onWarmTap(m);
       });
       _fm!.onTokenRefresh.listen((String t) {
         _token = t;
-        // ignore: avoid_print
-        print('[LF/PUSH] token.rotate len=${t.length}');
+        plog(() => '[LF/PUSH] token.rotate len=${t.length}');
         onTokenRotate?.call(t);
       });
-      // Cold-tap ingest from the launch intent is cheap — the
+      // Cold-tap ingest from the launch intent is cheap вЂ” the
       // dispatcher reads it right after, so keep it inline.
       await _ingestLaunchTap();
 
       _ready = true;
       // Everything below is fire-and-forget. _prepTray and
-      // getInitialMessage used to add 4–7 s to the critical path
-      // on first launch for no routing benefit — pushes that
+      // getInitialMessage used to add 4вЂ“7 s to the critical path
+      // on first launch for no routing benefit вЂ” pushes that
       // arrive while they are still warming are either queued
       // by the OS (notification payload) or handled by the bg
       // isolate (data payload).
       unawaited(_warmBackground());
     } catch (e, s) {
-      // ignore: avoid_print
-      print('[LF/PUSH] ignite.fail $e\n$s');
+      plog(() => '[LF/PUSH] ignite.fail $e\n$s');
     }
   }
 
@@ -286,8 +282,7 @@ class PushGate {
             .getInitialMessage()
             .timeout(const Duration(seconds: 3));
         if (initial != null) {
-          // ignore: avoid_print
-          print('[LF/PUSH] cold initial id=${initial.messageId} '
+          plog(() => '[LF/PUSH] cold initial id=${initial.messageId} '
               'data=${initial.data}');
           await _parkCold(initial);
         }
@@ -304,14 +299,12 @@ class PushGate {
             await _fm!.getToken().timeout(const Duration(seconds: 8));
         if (next != null && next.isNotEmpty) {
           _token = next;
-          // ignore: avoid_print
-          print('[LF/PUSH] token.first len=${next.length}');
+          plog(() => '[LF/PUSH] token.first len=${next.length}');
           onTokenRotate?.call(next);
           return;
         }
       } catch (e) {
-        // ignore: avoid_print
-        print('[LF/PUSH] token.step$step.fail $e');
+        plog(() => '[LF/PUSH] token.step$step.fail $e');
       }
       await Future<void>.delayed(Duration(milliseconds: 350 * (step + 1)));
     }

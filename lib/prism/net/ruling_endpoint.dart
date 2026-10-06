@@ -1,20 +1,28 @@
 import 'dart:convert';
+import 'dart:isolate';
 
+import '../diag.dart';
+import '../native/prism_ffi.dart';
 import '../routing.dart';
-import '../settings.dart';
 import 'local_vault.dart';
-import 'prism_http.dart';
+import 'ua_forger.dart';
 
 // ─────────────────────────────────────────────────────────────
-// RULING ENDPOINT — POST the assembled body, cache the answer
+// RULING ENDPOINT — seal + POST through the native relay caller
 // ─────────────────────────────────────────────────────────────
-// The backend is the single source of truth for the routing
-// decision. On an approved response we cache both the URL AND
-// its expiry so returning launches can skip the network call
-// when the URL is still fresh. On any failure — HTTP error,
-// timeout, malformed JSON — we return a rejected ruling; the
-// dispatcher converts that into a native route (or a no-link
-// route when the adapter is down).
+// The routing decision is made by the backend. The HTTPS call no
+// longer happens in Dart: the assembled body is handed to
+// `libprism_core.so` (`pr_route`), which seals it into the neutral
+// relay envelope, POSTs it to the proxy, and returns the verdict
+// JSON verbatim. The relay endpoint and the shared secret never
+// leave native code. On any failure — missing library, transport
+// error, the relay's 404 decoy, malformed JSON — we return a
+// rejected ruling; the dispatcher turns that into a native route.
+//
+// The native call blocks while the request is in flight, so it
+// runs inside `Isolate.run` to keep the UI thread free. The Rust
+// side re-opens the library per isolate, so no handle crosses the
+// isolate boundary.
 // ─────────────────────────────────────────────────────────────
 
 class RulingEndpoint {
@@ -23,38 +31,24 @@ class RulingEndpoint {
   final LocalVault _vault;
 
   Future<Ruling> query(Map<String, dynamic> body) async {
-    final String endpoint = PrismSettings.rulingEndpoint;
-    if (endpoint.isEmpty) {
-      // ignore: avoid_print
-      print('[LF/RULE] skip — endpoint unsealed empty');
-      return Ruling.reject('endpoint_missing');
+    if (!PrismNative.isAvailable) {
+      plog(() => '[LF/RULE] skip — native gate unavailable');
+      return Ruling.reject('gate_unavailable');
     }
 
-    // ignore: avoid_print
-    print('[LF/RULE] POST $endpoint body=${jsonEncode(body)}');
+    final String bodyJson = jsonEncode(body);
+    final String ua = UaForger.value;
+    plog(() => '[LF/RULE] route via native gate');
     final Stopwatch sw = Stopwatch()..start();
     try {
-      final response = await prismHttp
-          .post(
-            Uri.parse(endpoint),
-            headers: const <String, String>{
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-            },
-            body: jsonEncode(body),
-          )
-          .timeout(
-            Duration(seconds: PrismSettings.rulingTimeoutSeconds),
-          );
+      final String answer = await Isolate.run<String>(
+        () => PrismNative.route(bodyJson, ua),
+      );
+      plog(() => '[LF/RULE] answer in ${sw.elapsedMilliseconds}ms '
+          'len=${answer.length}');
+      if (answer.isEmpty) return Ruling.reject('gate_empty');
 
-      // ignore: avoid_print
-      print('[LF/RULE] ${response.statusCode} in ${sw.elapsedMilliseconds}ms '
-          'body=${response.body}');
-      if (response.statusCode != 200) {
-        return Ruling.reject('http_${response.statusCode}');
-      }
-
-      final dynamic decoded = jsonDecode(response.body);
+      final dynamic decoded = jsonDecode(answer);
       if (decoded is! Map) return Ruling.reject('malformed');
       final Ruling ruling = Ruling.fromJson(
         Map<String, dynamic>.from(decoded),
@@ -65,9 +59,8 @@ class RulingEndpoint {
       }
       return ruling;
     } catch (e) {
-      // ignore: avoid_print
-      print('[LF/RULE] fail in ${sw.elapsedMilliseconds}ms $e');
-      return Ruling.reject('network:$e');
+      plog(() => '[LF/RULE] fail in ${sw.elapsedMilliseconds}ms $e');
+      return Ruling.reject('native:$e');
     }
   }
 }

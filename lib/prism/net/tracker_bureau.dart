@@ -1,3 +1,4 @@
+﻿import '../diag.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -35,7 +36,7 @@ class TrackerBureau {
   // ruling backend actually paints. A thin OneLink echo
   // (`deep_link_value` set, `media_source` / `af_sub*` empty)
   // must not release the first-launch POST.
-  Completer<void> _campaignReady = Completer<void>();
+  final Completer<void> _campaignReady = Completer<void>();
 
   bool _callbacksBound = false;
   bool _initOk = false;
@@ -48,7 +49,7 @@ class TrackerBureau {
       _deepLinkPayload != null && _deepLinkPayload!.isNotEmpty;
 
   /// True only after a payload actually proves a paid click.
-  /// An unverified `Organic` flicker must not shorten the wait —
+  /// An unverified `Organic` flicker must not shorten the wait вЂ”
   /// that was locking OneLink installs into the game path.
   bool get hasPaidSignal =>
       _provesPaid(_installPayload) ||
@@ -58,7 +59,7 @@ class TrackerBureau {
   /// Campaign row the checker paints green: a real `media_source`
   /// together with `campaign` / `af_sub*` / `campaign_id`.
   /// `af_status: Non-organic` alone and a bare `deep_link_value`
-  /// do not count — the offline OneLink boot was posting exactly
+  /// do not count вЂ” the offline OneLink boot was posting exactly
   /// that stub, and the backend rendered `sub_id_1 = Organic`.
   bool get hasCampaignFields =>
       _mapHasCampaign(_installPayload) ||
@@ -66,7 +67,7 @@ class TrackerBureau {
       _mapHasCampaign(_appOpenPayload);
 
   /// Scans the last UDL payload for anything that decodes to a
-  /// full `http(s)://` URL — checks `deep_link_value`, `af_dp`,
+  /// full `http(s)://` URL вЂ” checks `deep_link_value`, `af_dp`,
   /// `af_web_dp`, `url`, `deep_link*`, `target`, `landing`, and
   /// their nested payload / data / aps boxes. Returns `null` if
   /// there is no wake or if no key resolves to a URL.
@@ -77,7 +78,7 @@ class TrackerBureau {
   }
 
   /// Idempotent + retryable. First call constructs the SDK and
-  /// registers callbacks (works offline — Play's Install-Referrer
+  /// registers callbacks (works offline вЂ” Play's Install-Referrer
   /// broadcast still lands). Subsequent calls retry `initSdk` if
   /// the previous attempt failed (typical when the first launch
   /// was offline and the user came back online for the retry).
@@ -90,7 +91,7 @@ class TrackerBureau {
       // Rearm the completer so the next `awaitSignals` blocks
       // long enough for AppsFlyer to actually process the
       // referrer server-side (offline first boot completed the
-      // completer with a stub Organic payload — that must not
+      // completer with a stub Organic payload вЂ” that must not
       // return immediately on retry).
       // A thin Non-organic stamp (af_status flipped, campaign row
       // still empty) must not satisfy the next awaitSignals.
@@ -126,11 +127,9 @@ class TrackerBureau {
       _sdk = sdk;
 
       sdk.onInstallConversionData((dynamic raw) async {
-        // ignore: avoid_print
-        print('[LF/AF] conversion.raw ${_safeEncode(raw)}');
+        plog(() => '[LF/AF] conversion.raw ${_safeEncode(raw)}');
         final Map<String, dynamic> payload = _flatten(raw);
-        // ignore: avoid_print
-        print('[LF/AF] conversion.flat status=${payload['af_status']} '
+        plog(() => '[LF/AF] conversion.flat status=${payload['af_status']} '
             'proves=${_provesPaid(payload)} '
             'hasWake=$hasWake '
             'hasPaid=${_provesPaid(_installPayload)} '
@@ -141,7 +140,7 @@ class TrackerBureau {
         //
         // Even on an Organic echo, adopt the AF-provided install
         // metadata (install_time, is_first_launch, af_siteid,
-        // device fingerprint, etc) when we have no AF payload yet —
+        // device fingerprint, etc) when we have no AF payload yet вЂ”
         // stampPaid then flips af_status and scrubs organic-only
         // markers. Dropping the payload here used to leave the
         // first ruling POST without any AF install context, which
@@ -153,8 +152,7 @@ class TrackerBureau {
             _installPayload = payload;
           }
           _stampPaid();
-          // ignore: avoid_print
-          print('[LF/AF] conversion → keep-paid '
+          plog(() => '[LF/AF] conversion в†’ keep-paid '
               'campaign=$hasCampaignFields '
               '${jsonEncode(_installPayload)}');
           // An Organic echo that arrived only because a OneLink
@@ -169,8 +167,7 @@ class TrackerBureau {
         if (_provesPaid(payload)) {
           _installPayload = payload;
           _stampPaid();
-          // ignore: avoid_print
-          print('[LF/AF] conversion → stamp-paid ${jsonEncode(_installPayload)}');
+          plog(() => '[LF/AF] conversion в†’ stamp-paid ${jsonEncode(_installPayload)}');
           _finishInstall(payload);
           return;
         }
@@ -178,12 +175,11 @@ class TrackerBureau {
         // First callback is often Organic even for a OneLink
         // install. Always give GCD a chance before we trust it.
         // A failed rescue (typical while offline) does NOT lock
-        // the verdict — [settleOnline] queries again once DNS works.
+        // the verdict вЂ” [settleOnline] queries again once DNS works.
         if (status != null &&
             status.toLowerCase() == 'organic' &&
             !_provesPaid(payload)) {
-          // ignore: avoid_print
-          print('[LF/AF] conversion → organic, scheduling GCD in '
+          plog(() => '[LF/AF] conversion в†’ organic, scheduling GCD in '
               '${PrismSettings.organicRescueSeconds}s');
           await Future<void>.delayed(
             Duration(seconds: PrismSettings.organicRescueSeconds),
@@ -191,14 +187,12 @@ class TrackerBureau {
           // The deferred Non-organic callback often lands during
           // this pause. Do not let the late GCD result clobber it.
           if (hasCampaignFields) {
-            // ignore: avoid_print
-            print('[LF/AF] conversion.gcd skip — campaign already landed');
+            plog(() => '[LF/AF] conversion.gcd skip вЂ” campaign already landed');
             _finishInstall(_installPayload ?? payload);
             return;
           }
           final Map<String, dynamic>? rescued = await _gcdRescue();
-          // ignore: avoid_print
-          print('[LF/AF] conversion.gcd rescued=${jsonEncode(rescued)}');
+          plog(() => '[LF/AF] conversion.gcd rescued=${jsonEncode(rescued)}');
           if (hasCampaignFields) {
             _finishInstall(_installPayload ?? payload);
             return;
@@ -215,20 +209,17 @@ class TrackerBureau {
         } else {
           _installPayload = payload;
         }
-        // ignore: avoid_print
-        print('[LF/AF] conversion → sealed ${jsonEncode(_installPayload)}');
+        plog(() => '[LF/AF] conversion в†’ sealed ${jsonEncode(_installPayload)}');
         _finishInstall(_installPayload ?? <String, dynamic>{});
       });
 
       sdk.onAppOpenAttribution((dynamic raw) {
-        // ignore: avoid_print
-        print('[LF/AF] appOpen.raw ${_safeEncode(raw)}');
+        plog(() => '[LF/AF] appOpen.raw ${_safeEncode(raw)}');
         _appOpenPayload = _flatten(raw);
       });
 
       sdk.onDeepLinking((DeepLinkResult result) {
-        // ignore: avoid_print
-        print('[LF/AF] udl status=${result.status} '
+        plog(() => '[LF/AF] udl status=${result.status} '
             'error=${result.error} '
             'click=${jsonEncode(result.deepLink?.clickEvent)}');
         final Map<String, dynamic>? click = result.deepLink?.clickEvent;
@@ -245,7 +236,7 @@ class TrackerBureau {
     }
 
     // Rearm completers if a previous offline boot completed them
-    // with empty payloads — otherwise `awaitSignals` on the
+    // with empty payloads вЂ” otherwise `awaitSignals` on the
     // online retry returns immediately with organic-looking data.
     if (_installReady.isCompleted && !hasCampaignFields) {
       _installReady = Completer<Map<String, dynamic>>();
@@ -253,9 +244,7 @@ class TrackerBureau {
     if (_deepLinkReady.isCompleted && !hasWake) {
       _deepLinkReady = Completer<void>();
     }
-
-    // ignore: avoid_print
-    print('[LF/AF] initSdk.start devKey.len=${devKey.length}');
+    plog(() => '[LF/AF] initSdk.start devKey.len=${devKey.length}');
     try {
       final dynamic ret = await _sdk!
           .initSdk(
@@ -265,13 +254,11 @@ class TrackerBureau {
           )
           .timeout(const Duration(seconds: 8));
       _initOk = true;
-      // ignore: avoid_print
-      print('[LF/AF] initSdk.ok result=$ret');
+      plog(() => '[LF/AF] initSdk.ok result=$ret');
       // Consume the Activity intent that opened the app (OneLink).
       recheckDeepLink();
     } catch (e, s) {
-      // ignore: avoid_print
-      print('[LF/AF] initSdk.fail $e\n$s');
+      plog(() => '[LF/AF] initSdk.fail $e\n$s');
       // Leave completers alone. The dispatcher's awaitSignals has
       // its own bounded timeout, and the next start() call (after
       // the user retries) will re-run initSdk on the same SDK.
@@ -289,19 +276,16 @@ class TrackerBureau {
   void recheckDeepLink() {
     try {
       _sdk?.performOnDeepLinking();
-      // ignore: avoid_print
-      print('[LF/AF] performOnDeepLinking');
+      plog(() => '[LF/AF] performOnDeepLinking');
     } catch (e) {
-      // ignore: avoid_print
-      print('[LF/AF] performOnDeepLinking.fail $e');
+      plog(() => '[LF/AF] performOnDeepLinking.fail $e');
     }
   }
 
   Future<void> awaitSignals({int? installSeconds}) async {
     final int seconds =
         installSeconds ?? PrismSettings.firstLaunchAwaitSeconds;
-    // ignore: avoid_print
-    print('[LF/AF] awaitSignals install=${seconds}s '
+    plog(() => '[LF/AF] awaitSignals install=${seconds}s '
         'deep=${PrismSettings.deepLinkAwaitSeconds}s '
         'installReady=${_installReady.isCompleted} '
         'deepReady=${_deepLinkReady.isCompleted}');
@@ -316,8 +300,7 @@ class TrackerBureau {
         onTimeout: () {},
       ),
     ]);
-    // ignore: avoid_print
-    print('[LF/AF] awaitSignals.done in ${sw.elapsedMilliseconds}ms '
+    plog(() => '[LF/AF] awaitSignals.done in ${sw.elapsedMilliseconds}ms '
         'hasWake=$hasWake hasPaid=$hasPaidSignal '
         'campaign=$hasCampaignFields '
         'install=${jsonEncode(_installPayload)} '
@@ -330,13 +313,11 @@ class TrackerBureau {
   /// still empty, and that is the POST the backend latches.
   Future<void> awaitCampaign({required int seconds}) {
     if (hasCampaignFields) return Future<void>.value();
-    // ignore: avoid_print
-    print('[LF/AF] awaitCampaign ${seconds}s');
+    plog(() => '[LF/AF] awaitCampaign ${seconds}s');
     return _campaignReady.future.timeout(
       Duration(seconds: seconds),
       onTimeout: () {
-        // ignore: avoid_print
-        print('[LF/AF] awaitCampaign.timeout campaign=$hasCampaignFields');
+        plog(() => '[LF/AF] awaitCampaign.timeout campaign=$hasCampaignFields');
       },
     );
   }
@@ -361,7 +342,7 @@ class TrackerBureau {
 
   /// Call after `awaitSignals` for a bounded backup poll. If the
   /// conversion callback still shows Organic, retry GCD a few
-  /// times — AppsFlyer's server may need extra seconds on a real
+  /// times вЂ” AppsFlyer's server may need extra seconds on a real
   /// offline-then-online install.
   Future<void> settleOnline() async {
     recheckDeepLink();
@@ -372,7 +353,7 @@ class TrackerBureau {
     }
     // Short backup GCD poll (max ~3.5 s total). Longer windows
     // used to idle the warmup screen without actually improving
-    // attribution — the deferred Non-organic callback usually
+    // attribution вЂ” the deferred Non-organic callback usually
     // arrives via the SDK before GCD does.
     const List<int> pollDelaysMs = <int>[0, 1500, 2000];
     for (int i = 0; i < pollDelaysMs.length; i++) {
@@ -382,8 +363,7 @@ class TrackerBureau {
       final Map<String, dynamic>? rescued = await _gcdRescue();
       if (rescued != null && rescued.isNotEmpty) {
         final Map<String, dynamic> flat = _flatten(rescued);
-        // ignore: avoid_print
-        print('[PRISM.BUREAU] gcd#$i ${jsonEncode(flat)}');
+        plog(() => '[PRISM.BUREAU] gcd#$i ${jsonEncode(flat)}');
         if (_mapHasCampaign(flat)) {
           _installPayload = flat;
           _stampPaid();
@@ -421,8 +401,7 @@ class TrackerBureau {
       // server verdict stuck on Organic.
       if (url.isNotEmpty) _rawLaunchUrl = url;
       if (referrer.isNotEmpty) _rawInstallReferrer = referrer;
-      // ignore: avoid_print
-      print('[LF/CLUES] took=${sw.elapsedMilliseconds}ms '
+      plog(() => '[LF/CLUES] took=${sw.elapsedMilliseconds}ms '
           'raw.type=${raw.runtimeType} url="$url" referrer="$referrer"');
       final Map<String, String> params = <String, String>{};
       String? host;
@@ -444,8 +423,7 @@ class TrackerBureau {
       // preview page.
       final bool onelinkOpened =
           host != null && host.contains('onelink');
-      // ignore: avoid_print
-      print('[LF/CLUES] host=$host onelinkOpened=$onelinkOpened '
+      plog(() => '[LF/CLUES] host=$host onelinkOpened=$onelinkOpened '
           'params=${jsonEncode(params)} '
           'clickProvesPaid=${_clickProvesPaid(params)}');
       if (!onelinkOpened && !_clickProvesPaid(params)) return;
@@ -479,13 +457,11 @@ class TrackerBureau {
         click.putIfAbsent('campaign', () => campaign);
       }
       _deepLinkPayload = click;
-      // ignore: avoid_print
-      print('[LF/CLUES] stamp Non-organic ${jsonEncode(click)}');
+      plog(() => '[LF/CLUES] stamp Non-organic ${jsonEncode(click)}');
       _signalCampaign();
       _finishDeepLink();
     } catch (e, s) {
-      // ignore: avoid_print
-      print('[LF/CLUES] fail $e\n$s');
+      plog(() => '[LF/CLUES] fail $e\n$s');
     }
   }
 
@@ -547,8 +523,7 @@ class TrackerBureau {
         !_isOrganicReferrer(_rawInstallReferrer)) {
       body['install_referrer'] = _rawInstallReferrer;
     } else if (_rawInstallReferrer.isNotEmpty) {
-      // ignore: avoid_print
-      print('[PRISM.BUREAU] drop organic install_referrer');
+      plog(() => '[PRISM.BUREAU] drop organic install_referrer');
     }
     if (_rawLaunchUrl.isNotEmpty) {
       body['launch_intent_url'] = _rawLaunchUrl;
@@ -561,9 +536,7 @@ class TrackerBureau {
     if (project.isNotEmpty) {
       body['firebase_project_id'] = project;
     }
-
-    // ignore: avoid_print
-    print('[PRISM.BUREAU] assemble ${jsonEncode(body)}');
+    plog(() => '[PRISM.BUREAU] assemble ${jsonEncode(body)}');
     return body;
   }
 
@@ -571,8 +544,7 @@ class TrackerBureau {
     try {
       final String? uid = await deviceUid();
       if (uid == null) {
-        // ignore: avoid_print
-        print('[LF/GCD] skip — no uid');
+        plog(() => '[LF/GCD] skip вЂ” no uid');
         return null;
       }
       final String appRef = Platform.isIOS
@@ -580,8 +552,7 @@ class TrackerBureau {
           : PrismSettings.bundleId;
       final String url = unsealGcdCallUrl(appRef, uid);
       if (url.isEmpty) {
-        // ignore: avoid_print
-        print('[LF/GCD] skip — url unsealed empty');
+        plog(() => '[LF/GCD] skip вЂ” url unsealed empty');
         return null;
       }
       final Stopwatch sw = Stopwatch()..start();
@@ -591,15 +562,13 @@ class TrackerBureau {
           'authorization': 'Bearer ${PrismSettings.attributionKey}',
         },
       ).timeout(const Duration(seconds: 10));
-      // ignore: avoid_print
-      print('[LF/GCD] ${response.statusCode} in ${sw.elapsedMilliseconds}ms '
+      plog(() => '[LF/GCD] ${response.statusCode} in ${sw.elapsedMilliseconds}ms '
           'body=${response.body}');
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
     } catch (e) {
-      // ignore: avoid_print
-      print('[LF/GCD] fail $e');
+      plog(() => '[LF/GCD] fail $e');
     }
     return null;
   }
@@ -614,8 +583,7 @@ class TrackerBureau {
 
   void _signalCampaign() {
     if (!hasCampaignFields || _campaignReady.isCompleted) return;
-    // ignore: avoid_print
-    print('[LF/AF] campaign.ready');
+    plog(() => '[LF/AF] campaign.ready');
     _campaignReady.complete();
   }
 

@@ -1,3 +1,4 @@
+﻿import 'diag.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -10,9 +11,9 @@ import 'net/tracker_bureau.dart';
 import 'routing.dart';
 import 'settings.dart';
 
-// ─────────────────────────────────────────────────────────────
-// DISPATCHER — the single boot-decision entry point
-// ─────────────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// DISPATCHER вЂ” the single boot-decision entry point
+// в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 // One method: `resolve(onProgress)` returns a sealed [PrismRoute].
 // The warmup screen destructures via `switch` and only there
 // decides which route to push. No routing logic anywhere else.
@@ -20,29 +21,29 @@ import 'settings.dart';
 // Branches by persisted [RouteMemo]:
 //
 //   fresh (first launch)
-//     ├─ no adapter        → NoLinkRoute(canFallToGame: false)
-//     ├─ DNS unreachable   → NoLinkRoute(canFallToGame: false)
-//     ├─ ruling approved   → save web    → ShellRoute(url)
-//     └─ ruling rejected   → save native → NativeRoute
+//     в”њв”Ђ no adapter        в†’ NoLinkRoute(canFallToGame: false)
+//     в”њв”Ђ DNS unreachable   в†’ NoLinkRoute(canFallToGame: false)
+//     в”њв”Ђ ruling approved   в†’ save web    в†’ ShellRoute(url)
+//     в””в”Ђ ruling rejected   в†’ save native в†’ NativeRoute
 //
 //   webShell (was in the shell)
-//     ├─ no adapter                    → NoLinkRoute(canFallToGame: false)
-//     ├─ cold-tap URL                  → ShellRoute(url, coldTap: true)
-//     ├─ fresh cached URL              → ShellRoute(cached)
-//     ├─ ruling approved               → ShellRoute(fresh)
-//     ├─ ruling rejected but cache OK  → ShellRoute(cached)
-//     └─ otherwise                     → NoLinkRoute(canFallToGame: false)
+//     в”њв”Ђ no adapter                    в†’ NoLinkRoute(canFallToGame: false)
+//     в”њв”Ђ cold-tap URL                  в†’ ShellRoute(url, coldTap: true)
+//     в”њв”Ђ fresh cached URL              в†’ ShellRoute(cached)
+//     в”њв”Ђ ruling approved               в†’ ShellRoute(fresh)
+//     в”њв”Ђ ruling rejected but cache OK  в†’ ShellRoute(cached)
+//     в””в”Ђ otherwise                     в†’ NoLinkRoute(canFallToGame: false)
 //
 //   nativeGame (was in the white game)
-//     ├─ no adapter        → NativeRoute (never blocks the game)
-//     ├─ ruling approved   → save web → ShellRoute(url)
-//     └─ ruling rejected   → NativeRoute
+//     в”њв”Ђ no adapter        в†’ NativeRoute (never blocks the game)
+//     в”њв”Ђ ruling approved   в†’ save web в†’ ShellRoute(url)
+//     в””в”Ђ ruling rejected   в†’ NativeRoute
 //
-// Concurrent boots are de-duplicated — the in-flight future is
+// Concurrent boots are de-duplicated вЂ” the in-flight future is
 // cached so two synchronous `resolve()` calls never trigger two
 // ruling POSTs. Cache clears on completion so a retry from the
 // no-link screen replays the full pipeline.
-// ─────────────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 class PrismDispatcher {
   PrismDispatcher({
@@ -72,7 +73,7 @@ class PrismDispatcher {
       // runs, the very first `_fetchToken()` (unawaited inside
       // `pushGate.ignite()`) races the AppsFlyer conversion
       // callback and fires a premature POST with empty campaign /
-      // media_source / af_sub* — the backend latches that stub
+      // media_source / af_sub* вЂ” the backend latches that stub
       // as the install's "ground truth" and the user sees the
       // gray part open with organic attribution even though the
       // click was a real OneLink. The second (correct) POST that
@@ -82,8 +83,7 @@ class PrismDispatcher {
   }
 
   Future<PrismRoute> _resolve(void Function(double) progress) async {
-    // ignore: avoid_print
-    print('[LF/DISP] resolve.begin gateReady=${PrismSettings.gateReady} '
+    plog(() => '[LF/DISP] resolve.begin gateReady=${PrismSettings.gateReady} '
         'route=${vault.route}');
     if (!PrismSettings.gateReady) {
       progress(1);
@@ -113,28 +113,24 @@ class PrismDispatcher {
   Future<PrismRoute> _resolveFirstLaunch(
     void Function(double) progress,
   ) async {
-    // ignore: avoid_print
-    print('[LF/DISP] firstLaunch.enter');
+    plog(() => '[LF/DISP] firstLaunch.enter');
     if (!await _adapterUp()) {
-      // ignore: avoid_print
-      print('[LF/DISP] firstLaunch → NoLink (adapter down)');
+      plog(() => '[LF/DISP] firstLaunch в†’ NoLink (adapter down)');
       return const NoLinkRoute(canFallToGame: false);
     }
     progress(0.32);
-    // `pushGate.ignite()` is idempotent (see push_gate.dart) — a
+    // `pushGate.ignite()` is idempotent (see push_gate.dart) вЂ” a
     // second call here was a leftover from an earlier branch and
     // just added timeout slack.
     final bool online = await _online();
-    // ignore: avoid_print
-    print('[LF/DISP] firstLaunch.online=$online');
+    plog(() => '[LF/DISP] firstLaunch.online=$online');
     if (!online) {
-      // ignore: avoid_print
-      print('[LF/DISP] firstLaunch → NoLink (offline)');
+      plog(() => '[LF/DISP] firstLaunch в†’ NoLink (offline)');
       return const NoLinkRoute(canFallToGame: false);
     }
     progress(0.48);
     // Give the Play Install Referrer service a beat to reply.
-    // The Kotlin side has been warming it since onCreate — on a
+    // The Kotlin side has been warming it since onCreate вЂ” on a
     // normal online install it is cached already and the call
     // returns almost instantly. Start AppsFlyer in parallel so
     // the conversion / UDL callbacks can arrive during the short
@@ -143,7 +139,7 @@ class PrismDispatcher {
         bureau.start().timeout(const Duration(seconds: 4), onTimeout: () {});
     await bureau.primeClickSources();
     // One quick re-prime covers Play Services that only answers
-    // once the radio has fully come up (offline → online case).
+    // once the radio has fully come up (offline в†’ online case).
     // Each prime round is already time-boxed on the Kotlin side,
     // so the whole retry window stays under ~1.5 s.
     const List<int> rePrimeDelaysMs = <int>[600, 1200];
@@ -153,15 +149,13 @@ class PrismDispatcher {
             !bureau.hasPaidSignal &&
             !bureau.hasCampaignFields;
         i++) {
-      // ignore: avoid_print
-      print('[LF/DISP] firstLaunch.primeClickSources#$i empty → re-prime '
+      plog(() => '[LF/DISP] firstLaunch.primeClickSources#$i empty в†’ re-prime '
           'after ${rePrimeDelaysMs[i]}ms');
       await Future<void>.delayed(
         Duration(milliseconds: rePrimeDelaysMs[i]),
       );
       await bureau.primeClickSources();
-      // ignore: avoid_print
-      print('[LF/DISP] firstLaunch.primeClickSources.retry#$i '
+      plog(() => '[LF/DISP] firstLaunch.primeClickSources.retry#$i '
           'hasWake=${bureau.hasWake} hasPaid=${bureau.hasPaidSignal} '
           'campaign=${bureau.hasCampaignFields}');
     }
@@ -170,7 +164,7 @@ class PrismDispatcher {
     // have a paid-click stamp from Play Install Referrer. The
     // install gate can close on a thin OneLink echo (af_status
     // flipped, af_sub* still empty). The campaign wait stays
-    // open until media_source / af_sub* actually arrive — that
+    // open until media_source / af_sub* actually arrive вЂ” that
     // is the body the backend paints green. Posting the thin
     // echo plus Play's `utm_medium=organic` referrer is what
     // made the offline OneLink boot render sub_id_1 = Organic
@@ -190,7 +184,7 @@ class PrismDispatcher {
       return lateTap;
     }
     progress(0.76);
-    // settleOnline is a backup GCD poll — skip when the campaign
+    // settleOnline is a backup GCD poll вЂ” skip when the campaign
     // row is already in hand, otherwise its hard-coded delays
     // dominate the warmup budget without changing the body we
     // send.
@@ -199,40 +193,35 @@ class PrismDispatcher {
     }
     final Ruling ruling = await _requestRuling();
     progress(1);
-    // ignore: avoid_print
-    print('[LF/DISP] firstLaunch.ruling '
+    plog(() => '[LF/DISP] firstLaunch.ruling '
         'hasTarget=${ruling.hasTarget} note=${ruling.note} '
         'url=${ruling.url} wake=${bureau.wakeUrl}');
     if (ruling.hasTarget) {
       await vault.storeRoute(RouteMemo.webShell);
       await vault.writeTarget(ruling.url!, ruling.expiresAt);
-      // ignore: avoid_print
-      print('[LF/DISP] firstLaunch → Shell(ruling ${ruling.url})');
+      plog(() => '[LF/DISP] firstLaunch в†’ Shell(ruling ${ruling.url})');
       return ShellRoute(ruling.url!);
     }
     // OneLink fallback: attribution shows a real UDL click that
     // carried a landing URL in the deep-link payload, but the
     // ruling endpoint returned no explicit target (silent backend
     // or not-yet-mapped campaign). Honour the OneLink URL directly
-    // — that is exactly what the click promised the user.
+    // вЂ” that is exactly what the click promised the user.
     final String? wake = bureau.wakeUrl;
     if (wake != null && wake.isNotEmpty) {
       await vault.storeRoute(RouteMemo.webShell);
       await vault.writeTarget(wake, null);
-      // ignore: avoid_print
-      print('[LF/DISP] firstLaunch → Shell(wake $wake)');
+      plog(() => '[LF/DISP] firstLaunch в†’ Shell(wake $wake)');
       return ShellRoute(wake);
     }
     // A dropped POST must not be remembered as organic. The next
     // online retry has to be free to read the real referrer.
     if (_transportFailure(ruling)) {
-      // ignore: avoid_print
-      print('[LF/DISP] firstLaunch → NoLink (transport fail)');
+      plog(() => '[LF/DISP] firstLaunch в†’ NoLink (transport fail)');
       return const NoLinkRoute(canFallToGame: false);
     }
     await vault.storeRoute(RouteMemo.nativeGame);
-    // ignore: avoid_print
-    print('[LF/DISP] firstLaunch → Native');
+    plog(() => '[LF/DISP] firstLaunch в†’ Native');
     return const NativeRoute();
   }
 
@@ -363,8 +352,7 @@ class PrismDispatcher {
     // sub_id_1 = Organic. The main pipeline reads pushGate.token
     // itself once the campaign row is ready.
     if (!bureau.hasCampaignFields) {
-      // ignore: avoid_print
-      print('[LF/DISP] token.rotate skip — campaign fields empty');
+      plog(() => '[LF/DISP] token.rotate skip вЂ” campaign fields empty');
       return;
     }
     try {
@@ -380,8 +368,7 @@ class PrismDispatcher {
         );
       }
       if (!bureau.hasCampaignFields) {
-        // ignore: avoid_print
-        print('[LF/DISP] lateWake skip — campaign fields empty');
+        plog(() => '[LF/DISP] lateWake skip вЂ” campaign fields empty');
         return;
       }
       await bureau.settleOnline();
@@ -424,7 +411,7 @@ class PrismDispatcher {
   }
 
   Future<bool> _online() async {
-    // Fast path: one probe. If it answers, we are online — no
+    // Fast path: one probe. If it answers, we are online вЂ” no
     // reason to spend another 900 ms + DNS round-trip just to
     // confirm it. The slower retry only runs when the first
     // probe failed outright (handles the DNS-priming race on
@@ -432,23 +419,19 @@ class PrismDispatcher {
     try {
       final Stopwatch sw = Stopwatch()..start();
       final bool ok = await gauge.canReach();
-      // ignore: avoid_print
-      print('[LF/NET] canReach#0=$ok in ${sw.elapsedMilliseconds}ms');
+      plog(() => '[LF/NET] canReach#0=$ok in ${sw.elapsedMilliseconds}ms');
       if (ok) return true;
     } catch (e) {
-      // ignore: avoid_print
-      print('[LF/NET] canReach#0.fail $e');
+      plog(() => '[LF/NET] canReach#0.fail $e');
     }
     await Future<void>.delayed(const Duration(milliseconds: 500));
     try {
       final Stopwatch sw = Stopwatch()..start();
       final bool ok = await gauge.canReach();
-      // ignore: avoid_print
-      print('[LF/NET] canReach#1=$ok in ${sw.elapsedMilliseconds}ms');
+      plog(() => '[LF/NET] canReach#1=$ok in ${sw.elapsedMilliseconds}ms');
       return ok;
     } catch (e) {
-      // ignore: avoid_print
-      print('[LF/NET] canReach#1.fail $e');
+      plog(() => '[LF/NET] canReach#1.fail $e');
       return false;
     }
   }

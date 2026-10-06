@@ -51,4 +51,15 @@ key.properties
 android/key.properties
 /dist/
 rust/prism_core/target
-android/app/src/main/jniLibs
+
+# Rust build artifacts
+rust/prism_core/target/
+rust/**/target/
+
+# Packer input — real credentials, never commit (use the .example)
+tool/prism.secret.json
+
+# NOTE: android/app/src/main/jniLibs is intentionally NOT ignored.
+# The sealed libprism_core.so must ship with the repo so every
+# release build contains the gate (a missing .so silently drops
+# every user into the white game). Build it with tool/build_rust.ps1.

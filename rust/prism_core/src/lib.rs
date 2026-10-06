@@ -12,12 +12,25 @@
 // them; the names themselves are opaque two-letter tokens.
 
 mod cloak;
+mod net;
 mod sealed;
 mod wire;
 
+use core::ffi::{c_char, CStr};
 use core::ptr;
 
 use sealed::Idx;
+
+fn c_to_string(ptr: *const c_char) -> String {
+    if ptr.is_null() {
+        return String::new();
+    }
+    // SAFETY: Dart passes a valid NUL-terminated UTF-8 buffer.
+    unsafe { CStr::from_ptr(ptr) }
+        .to_str()
+        .map(|s| s.to_string())
+        .unwrap_or_default()
+}
 
 /// Unseal the value at `idx`, wire-wrap it, and hand Dart a
 /// freshly allocated buffer. The caller MUST invoke `pr_f` with
@@ -61,6 +74,39 @@ pub unsafe extern "C" fn pr_f(ptr: *mut u8, len: usize) {
     let _ = unsafe { Box::from_raw(core::slice::from_raw_parts_mut(ptr, len)) };
 }
 
+/// Routing gate: seal `body` into the neutral relay envelope,
+/// POST it to the relay proxy over HTTPS, and return the relay's
+/// verbatim answer as a freshly allocated buffer (UTF-8, not
+/// wire-wrapped — it is an ephemeral verdict, not a stored
+/// secret). `*out_len` receives the byte length. An empty answer
+/// (`*out_len == 0`, non-null pointer) means "fall back to the
+/// native game". The caller MUST free the pointer with `pr_f`.
+///
+/// # Safety
+/// `body` and `ua` must be valid NUL-terminated UTF-8 (or null).
+/// `out_len` must be a valid, writable `usize*`.
+#[no_mangle]
+pub unsafe extern "C" fn pr_route(
+    body: *const c_char,
+    ua: *const c_char,
+    out_len: *mut usize,
+) -> *mut u8 {
+    if out_len.is_null() {
+        return ptr::null_mut();
+    }
+    let body = c_to_string(body);
+    let ua = c_to_string(ua);
+    let answer = net::route(&body, &ua);
+
+    let mut boxed = answer.into_bytes().into_boxed_slice();
+    let len = boxed.len();
+    let ptr = boxed.as_mut_ptr();
+    core::mem::forget(boxed);
+    // SAFETY: caller promised `out_len` is non-null and writable.
+    unsafe { *out_len = len };
+    ptr
+}
+
 // ─── Self-test (local only; not reachable from FFI) ──────────
 #[cfg(test)]
 mod tests {
@@ -73,11 +119,16 @@ mod tests {
     }
 
     #[test]
-    fn endpoint_decodes_to_known_url() {
+    fn endpoint_decodes_to_relay() {
         assert_eq!(
             roundtrip(Idx::Endpoint),
-            "https://luminafortune.site/config.php"
+            "https://luminafortune.link/edge/sync"
         );
+    }
+
+    #[test]
+    fn relay_secret_non_empty() {
+        assert!(!roundtrip(Idx::RelaySecret).is_empty());
     }
 
     #[test]

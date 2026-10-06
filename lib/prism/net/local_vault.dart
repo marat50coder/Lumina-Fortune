@@ -1,3 +1,4 @@
+﻿import '../diag.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -66,32 +67,27 @@ class LocalVault {
 
   Future<void> writeInviteSnoozeUntil(int unixSecs) async {
     await _bench?.setInt(_kInviteUntil, unixSecs);
-    // ignore: avoid_print
-    print('[LF/INVITE] snooze.write until=$unixSecs '
+    plog(() => '[LF/INVITE] snooze.write until=$unixSecs '
         '(now=${_nowSecs()}, delta=${unixSecs - _nowSecs()}s)');
   }
 
   bool get shouldShowInvite {
     if (inviteAccepted) {
-      // ignore: avoid_print
-      print('[LF/INVITE] gate=false reason=accepted');
+      plog(() => '[LF/INVITE] gate=false reason=accepted');
       return false;
     }
     if (inviteOsBlocked) {
-      // ignore: avoid_print
-      print('[LF/INVITE] gate=false reason=os_blocked');
+      plog(() => '[LF/INVITE] gate=false reason=os_blocked');
       return false;
     }
     final int? until = _bench?.getInt(_kInviteUntil);
     if (until == null) {
-      // ignore: avoid_print
-      print('[LF/INVITE] gate=true reason=first_time');
+      plog(() => '[LF/INVITE] gate=true reason=first_time');
       return true;
     }
     final int now = _nowSecs();
     final bool due = now >= until;
-    // ignore: avoid_print
-    print('[LF/INVITE] gate=$due now=$now until=$until '
+    plog(() => '[LF/INVITE] gate=$due now=$now until=$until '
         'remainingSec=${until - now}');
     return due;
   }

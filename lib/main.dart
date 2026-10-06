@@ -1,3 +1,4 @@
+﻿import 'prism/diag.dart';
 import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -16,10 +17,9 @@ import 'prism/shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // ignore: avoid_print
-  print('[LF/MAIN] boot');
+  plog(() => '[LF/MAIN] boot');
   // Background push handler must be registered before the first
-  // frame — it is instant, no await needed.
+  // frame вЂ” it is instant, no await needed.
   FirebaseMessaging.onBackgroundMessage(prismBgPush);
 
   SystemChrome.setPreferredOrientations(DeviceOrientation.values);
@@ -48,7 +48,7 @@ Future<void> main() async {
     await vault.warm().timeout(const Duration(milliseconds: 500));
   } catch (_) {}
 
-  // One quick adapter check — no retry. If it is ambiguous we
+  // One quick adapter check вЂ” no retry. If it is ambiguous we
   // continue optimistically; the dispatcher runs a real DNS
   // probe once the warmup screen is up anyway, so a second
   // check here was pure latency on the system splash.
@@ -58,8 +58,7 @@ Future<void> main() async {
         .isDefinitelyOffline()
         .timeout(const Duration(milliseconds: 350));
   } catch (_) {}
-  // ignore: avoid_print
-  print('[LF/MAIN] startOffline=$startOffline');
+  plog(() => '[LF/MAIN] startOffline=$startOffline');
 
   if (startOffline) {
     runApp(LuminaShell(
@@ -74,9 +73,9 @@ Future<void> main() async {
   // Firebase.initializeApp + UaForger.prime used to block here
   // for up to 9 s before the first frame. Both are idempotent
   // and have safe fallbacks:
-  //   • Firebase.initializeApp is called again inside
+  //   вЂў Firebase.initializeApp is called again inside
   //     pushGate.ignite() during dispatcher.resolve.
-  //   • UaForger has a code-unit seed fallback, and the WebView
+  //   вЂў UaForger has a code-unit seed fallback, and the WebView
   //     reads the cached value lazily on first use.
   // Running them unawaited lets runApp fire immediately so the
   // warmup screen replaces the system splash within ~100 ms.

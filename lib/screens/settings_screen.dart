@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../core/assets.dart';
 import '../core/audio.dart';
-import '../core/nav.dart';
 import '../core/theme.dart';
 import '../state/game_controller.dart';
 import '../widgets/ui.dart';
