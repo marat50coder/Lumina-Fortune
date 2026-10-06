@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     cleartextTrafficPermitted="true" on `base-config` is intentional
-    and mandatory. Partners routinely ship push URLs on `http://…`
-    intermediates; a "false" base with per-domain whitelisting silently
-    breaks the next time the manager renames a sub-domain.
-    See pitfalls doc §17.
+    and mandatory: some push and landing chains route through
+    `http://…` intermediates, and a "false" base with per-domain
+    whitelisting silently breaks the next time a sub-domain is
+    renamed.
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true">

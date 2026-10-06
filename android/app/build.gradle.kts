@@ -95,6 +95,9 @@ kotlin {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // Play Install Referrer. AppsFlyer often reports the first
+    // OneLink install as Organic before it reads this string.
+    implementation("com.android.installreferrer:installreferrer:2.2")
 }
 
 flutter {

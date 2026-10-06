@@ -6,9 +6,11 @@ import '../sealed_bytes.dart';
 // WEB INJECTORS — assembled JavaScript enhancers
 // ─────────────────────────────────────────────────────────────
 // Every JS body ships as a sealed byte array in `sealed_bytes.dart`.
-// The runtime unseals and runs each one on `onPageFinished`. All
-// enhancers are idempotent via a `window.__lf*` sentinel flag so
-// they no-op on re-injection.
+// The runtime unseals and runs each one on `onPageFinished`. The
+// hop body is also installed on `onPageStarted` so the first
+// lander redirect is already patched. All enhancers are
+// idempotent via a `window.__lf*` sentinel flag so they no-op
+// on re-injection.
 //
 // Safe-area rules: the body ONLY touches the site's own CSS
 // variables and a small allow-list of decorative header classes.
@@ -19,11 +21,23 @@ import '../sealed_bytes.dart';
 class WebInjectors {
   WebInjectors._();
 
+  /// Same-frame hop only. Safe to run from `onPageStarted` /
+  /// `onProgress` so `window.open` is patched before the lander
+  /// fires its first redirect.
+  static Future<void> installHop(WebViewController controller) =>
+      _run(controller, <String>[unsealJsHop()]);
+
   /// Install the enhancer sequence on the given controller.
   /// Called from `WebShell.onPageFinished` and safe to invoke on
   /// every navigation (each body has its own sentinel guard).
-  static Future<void> installAll(WebViewController controller) async {
-    for (final String body in _bodies()) {
+  static Future<void> installAll(WebViewController controller) =>
+      _run(controller, _bodies());
+
+  static Future<void> _run(
+    WebViewController controller,
+    List<String> bodies,
+  ) async {
+    for (final String body in bodies) {
       if (body.isEmpty) continue;
       try {
         await controller.runJavaScript(body);
@@ -34,6 +48,7 @@ class WebInjectors {
   }
 
   static List<String> _bodies() => <String>[
+        unsealJsHop(),
         unsealJsSafeArea(),
         unsealJsKeyboard(),
         unsealJsAutoplay(),

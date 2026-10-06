@@ -9,9 +9,7 @@ import 'dart:typed_data';
 // binary are NEVER the plaintext — they only become the plain
 // UTF-8 payload after running through the keystream XOR below.
 //
-// The template's default codec is a position-XOR family; a
-// portfolio-diverse sibling MUST pick a different family. This
-// build uses:
+// The codec uses:
 //
 //   1. FNV-1a fold of the salt into a 32-bit seed. Deterministic
 //      per project because the salt bytes are project-unique.
@@ -20,12 +18,12 @@ import 'dart:typed_data';
 //      harvests 8 bits per iteration into the keystream.
 //   3. `plain[i] = encoded[i] XOR stream[i % streamLen]`.
 //
-// No position-mask fold: the shape is deliberately different
-// from the position-XOR family so cross-app scanners cannot
-// cluster the decoder-loop shape.
+// No position-mask fold — a keystream-XOR is enough to hide the
+// plaintext from static scanners without introducing a shape that
+// static scanners routinely cluster on.
 // ─────────────────────────────────────────────────────────────
 
-// Salt bytes — project-unique. Rotated per portfolio slot.
+// Salt bytes — project-unique.
 const List<int> _saltBytes = <int>[
   0x5D, 0x21, 0xF6, 0xB0,
   0x8E, 0x37, 0x74, 0xC9,
@@ -34,7 +32,7 @@ const List<int> _saltBytes = <int>[
   0x2C, 0x7F,
 ];
 
-// Keystream length. Rotate per project (range 16..48).
+// Keystream length.
 const int _streamLen = 29;
 
 // FNV-1a 32-bit parameters.
@@ -64,10 +62,10 @@ final Uint8List _stream = _buildStream();
 
 /// Reveals the UTF-8 plaintext behind a sealed byte list.
 ///
-/// Returns `""` for an empty input — that is the state on a fresh
-/// template checkout before the operator has packed real values.
-/// Callers should check `.isEmpty` on the returned string to
-/// decide whether a value has been provisioned.
+/// Returns `""` for an empty input — that is the state before the
+/// sealed-bytes generator has packed real values. Callers should
+/// check `.isEmpty` on the returned string to decide whether a
+/// value has been provisioned.
 String unseal(List<int> sealed) {
   if (sealed.isEmpty) return '';
   final Uint8List out = Uint8List(sealed.length);

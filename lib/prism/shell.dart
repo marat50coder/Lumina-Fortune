@@ -58,6 +58,52 @@ class _LuminaShellState extends State<LuminaShell>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
     widget.dispatcher.bureau.recheckDeepLink();
+    // Re-evaluate invite gating on every resume. Aggressive
+    // process retention (ColorOS / MIUI / EMUI) can keep the
+    // WebShell alive for days after a "Skip" tap; without this,
+    // the invite screen would never resurface until the process
+    // was actually terminated. See invite-snooze flow in
+    // PrismSettings.inviteSnoozeSeconds.
+    _reevaluateInviteAfterResume();
+  }
+
+  Future<void> _reevaluateInviteAfterResume() async {
+    if (_openingGray) return;
+    if (!widget.vault.shouldShowInvite) return;
+    final NavigatorState? nav = _nav.currentState;
+    if (nav == null) return;
+    // Only interrupt the shell path — never the native game or
+    // the warmup / no-link screens.
+    final String? targetUrl = await _peekActiveShellUrl();
+    if (targetUrl == null || targetUrl.isEmpty) return;
+    if (!mounted) return;
+    _openingGray = true;
+    // ignore: avoid_print
+    print('[LF/INVITE] resume.reopen target=$targetUrl');
+    nav.pushAndRemoveUntil(
+      MaterialPageRoute<void>(
+        builder: (_) => InviteScreen(
+          vault: widget.vault,
+          pushGate: widget.pushGate,
+          targetUrl: targetUrl,
+        ),
+      ),
+      (Route<dynamic> _) => false,
+    );
+    _openingGray = false;
+  }
+
+  /// Returns the URL the user should return to AFTER seeing the
+  /// invite again — i.e. the current shell target. `null` when
+  /// there is no shell to bounce back to (native game path).
+  Future<String?> _peekActiveShellUrl() async {
+    final String? cached = await widget.vault.cachedTarget();
+    if (cached != null &&
+        cached.isNotEmpty &&
+        !widget.vault.cachedTargetExpired) {
+      return cached;
+    }
+    return null;
   }
 
   WarmupScreen _warmup() {

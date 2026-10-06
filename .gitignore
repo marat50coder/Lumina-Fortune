@@ -50,3 +50,5 @@ app.*.map.json
 key.properties
 android/key.properties
 /dist/
+rust/prism_core/target
+android/app/src/main/jniLibs

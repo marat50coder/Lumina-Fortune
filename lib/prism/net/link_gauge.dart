@@ -17,8 +17,7 @@ import '../settings.dart';
 // ⚠️ VPN counts as connectivity. See pitfalls doc §3.
 // ─────────────────────────────────────────────────────────────
 
-// Rotate this pair per project. Two cheap-DNS hosts unrelated
-// to the partner AND the ruling endpoint.
+// Two cheap-DNS hosts kept independent of any endpoint we own.
 const List<String> _probeHosts = <String>[
   'apple.com',
   'wikipedia.org',

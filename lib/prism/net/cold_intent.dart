@@ -6,7 +6,7 @@ import 'local_vault.dart';
 // A cold-boot push tap on Android delivers the URL through the
 // launch intent, which Firebase Messaging surfaces via
 // `getInitialMessage()`. [PushGate] writes it into the vault's
-// pending slot. This class is a thin one-shot reader so the
+// pending-URL entry. This class is a thin one-shot reader so the
 // dispatcher has a single entry point for cold-launch URLs,
 // symmetric with the returning-launch path.
 // ─────────────────────────────────────────────────────────────

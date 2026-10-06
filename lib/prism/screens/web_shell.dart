@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
+import 'dart:ui' as ui show FlutterView;
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
@@ -28,6 +30,7 @@ import 'no_link_screen.dart';
 //   • warm push URL delivery via [PushGate.onWarmUrl]
 //   • native file chooser via MethodChannel (no file_picker dep)
 //   • JS enhancers composed by [WebInjectors.installAll]
+//   • first-hop redirects stay in-frame (window.open / _blank)
 //
 // NO client-side classification of the target site — no
 // keyword regexes over the page content. Any classification
@@ -58,11 +61,24 @@ class _WebShellState extends State<WebShell>
   bool _offlineShown = false;
   String? _lastMainFrame;
   int _redirectRetries = 0;
+  int _hopTick = 0;
   Timer? _dropTimer;
-  Timer? _rotateVeilTimer;
+  Timer? _loadWatchdog;
   StreamSubscription<List<ConnectivityResult>>? _connSub;
-  Orientation? _lastOrientation;
-  bool _rotating = false;
+
+  // Watchdog window: on some Android WebView builds, a request
+  // against a dead network just hangs the main frame — no
+  // onWebResourceError, no onPageFinished — leaving the user on
+  // a frozen spinner. If we don't see onPageFinished within this
+  // window, we probe connectivity and route offline if there is
+  // truly no reach. 15 s is comfortably above a cold TLS + first
+  // paint on a slow 3G, but below a reasonable patience window.
+  static const Duration _loadWatchdogWindow = Duration(seconds: 15);
+
+  // Towerbound glass_deck: cache the max safe area seen per
+  // orientation and reapply that one box when the phone turns.
+  EdgeInsets _padPortrait = EdgeInsets.zero;
+  EdgeInsets _padLandscape = EdgeInsets.zero;
 
   // Rotate per project. Same string in MainActivity.kt.
   static const MethodChannel _uploadBridge =
@@ -79,9 +95,10 @@ class _WebShellState extends State<WebShell>
       DeviceOrientation.landscapeRight,
     ]);
     _enterImmersive();
-    _mountController();
+    _assembleController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_setImeOverlay(true));
+      unawaited(_bootLoad());
     });
 
     widget.pushGate.onWarmUrl = (String url) {
@@ -139,27 +156,117 @@ class _WebShellState extends State<WebShell>
     if (state == AppLifecycleState.resumed) _enterImmersive();
   }
 
-  void _mountController() {
-    _wv = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setUserAgent(UaForger.value)
-      ..setBackgroundColor(Colors.black)
-      ..enableZoom(false)
-      ..setNavigationDelegate(NavigationDelegate(
-        onPageStarted: (_) {
-          if (mounted) setState(() => _spinner = true);
-        },
-        onPageFinished: (_) {
-          if (mounted) setState(() => _spinner = false);
-          _redirectRetries = 0;
-          WebInjectors.installAll(_wv);
-        },
-        onWebResourceError: _onError,
-        onNavigationRequest: _decideNavigation,
-      ));
+  // Rotation on many Android ROMs (ColorOS, MIUI, some OneUI
+  // builds) drops immersiveSticky and re-shows the system nav
+  // bar as a black strip at the bottom of the landscape view.
+  // Re-applying the mode on every metrics change keeps the
+  // WebView flush with the physical edges after a turn.
+  Orientation? _lastOrientation;
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    final ui.FlutterView? view =
+        WidgetsBinding.instance.platformDispatcher.implicitView;
+    if (view == null) return;
+    final Size logical = view.physicalSize / view.devicePixelRatio;
+    final Orientation next = logical.width >= logical.height
+        ? Orientation.landscape
+        : Orientation.portrait;
+    if (_lastOrientation == next) return;
+    _lastOrientation = next;
+    _enterImmersive();
+    // A second pass after the OS has finished the rotation
+    // animation — some devices restore the nav bar mid-animation.
+    Future<void>.delayed(const Duration(milliseconds: 220), () {
+      if (!mounted) return;
+      _enterImmersive();
+    });
+  }
 
-    _configureAndroid();
-    _wv.loadRequest(Uri.parse(widget.url));
+  void _assembleController() {
+    _wv = WebViewController();
+    unawaited(_wv.setJavaScriptMode(JavaScriptMode.unrestricted));
+    unawaited(_wv.setUserAgent(UaForger.value));
+    unawaited(_wv.setBackgroundColor(Colors.black));
+    unawaited(_wv.enableZoom(false));
+    unawaited(_wv.setNavigationDelegate(NavigationDelegate(
+      onPageStarted: (String url) {
+        _hopTick = 0;
+        if (_isHttpish(url)) _lastMainFrame = url;
+        if (mounted) setState(() => _spinner = true);
+        _armLoadWatchdog();
+        unawaited(WebInjectors.installHop(_wv));
+      },
+      onProgress: (int p) {
+        if (p >= 12 && _hopTick < 2) {
+          _hopTick++;
+          unawaited(WebInjectors.installHop(_wv));
+        }
+        // Any meaningful progress → page is responsive, cancel
+        // the no-signal watchdog. onPageFinished will land on
+        // its own.
+        if (p >= 60) _cancelLoadWatchdog();
+      },
+      onPageFinished: (_) {
+        if (mounted) setState(() => _spinner = false);
+        _redirectRetries = 0;
+        _cancelLoadWatchdog();
+        unawaited(WebInjectors.installAll(_wv));
+      },
+      onUrlChange: (UrlChange change) {
+        final String? next = change.url;
+        if (next != null && _isHttpish(next)) _lastMainFrame = next;
+      },
+      onWebResourceError: _onError,
+      onNavigationRequest: _decideNavigation,
+    )));
+  }
+
+  void _armLoadWatchdog() {
+    _loadWatchdog?.cancel();
+    _loadWatchdog = Timer(_loadWatchdogWindow, _loadWatchdogFired);
+  }
+
+  void _cancelLoadWatchdog() {
+    _loadWatchdog?.cancel();
+    _loadWatchdog = null;
+  }
+
+  Future<void> _loadWatchdogFired() async {
+    // ignore: avoid_print
+    print('[LF/WEB] watchdog fired — probing connectivity');
+    if (_offlineShown || !mounted) return;
+    final bool reachable = await LinkGauge()
+        .canReach()
+        .timeout(const Duration(seconds: 6), onTimeout: () => false);
+    // ignore: avoid_print
+    print('[LF/WEB] watchdog reachable=$reachable');
+    if (!reachable && mounted) {
+      _routeOffline();
+    } else if (reachable && mounted) {
+      // Page silently stalled while connectivity is actually up —
+      // single reload of the last known good URL. Prevents the
+      // "stuck spinner forever" trap seen on some WebView builds.
+      final String target = _lastMainFrame ?? widget.url;
+      // ignore: avoid_print
+      print('[LF/WEB] watchdog soft-reload $target');
+      unawaited(_wv.loadRequest(Uri.parse(target)));
+      _armLoadWatchdog();
+    }
+  }
+
+  Future<void> _bootLoad() async {
+    await _wv.setJavaScriptMode(JavaScriptMode.unrestricted);
+    await _wv.setUserAgent(UaForger.value);
+    await _configureAndroid();
+    if (!mounted) return;
+    _armLoadWatchdog();
+    await _wv.loadRequest(Uri.parse(widget.url));
+  }
+
+  bool _isHttpish(String url) {
+    final String lower = url.toLowerCase();
+    return lower.startsWith('http://') || lower.startsWith('https://');
   }
 
   void _onError(WebResourceError err) {
@@ -202,33 +309,48 @@ class _WebShellState extends State<WebShell>
 
   NavigationDecision _decideNavigation(NavigationRequest req) {
     final Uri? uri = Uri.tryParse(req.url);
-    if (uri == null) return NavigationDecision.prevent;
+    if (uri == null) return NavigationDecision.navigate;
+    final String scheme = uri.scheme.toLowerCase();
     const Set<String> inApp = <String>{
       'http',
       'https',
       'about',
       'data',
       'blob',
+      'javascript',
     };
-    if (inApp.contains(uri.scheme)) {
-      if (req.isMainFrame) _lastMainFrame = req.url;
+    if (scheme.isEmpty || inApp.contains(scheme)) {
+      if (req.isMainFrame && (scheme == 'http' || scheme == 'https')) {
+        _lastMainFrame = req.url;
+      }
       return NavigationDecision.navigate;
     }
     _handOff(uri);
     return NavigationDecision.prevent;
   }
 
-  void _configureAndroid() {
+  Future<void> _configureAndroid() async {
     if (!Platform.isAndroid) return;
     if (_wv.platform is! AndroidWebViewController) return;
     final AndroidWebViewController ctrl =
         _wv.platform as AndroidWebViewController;
 
-    ctrl.setMediaPlaybackRequiresUserGesture(false);
-    ctrl.setOnPlatformPermissionRequest(
+    await ctrl.setMediaPlaybackRequiresUserGesture(false);
+    await ctrl.setUseWideViewPort(true);
+    await ctrl.setMixedContentMode(MixedContentMode.alwaysAllow);
+    await ctrl.setGeolocationEnabled(true);
+    await ctrl.setGeolocationPermissionsPromptCallbacks(
+      onShowPrompt: (_) async {
+        return const GeolocationPermissionsResponse(
+          allow: true,
+          retain: true,
+        );
+      },
+    );
+    await ctrl.setOnPlatformPermissionRequest(
       (PlatformWebViewPermissionRequest r) => r.grant(),
     );
-    ctrl.setOnShowFileSelector(_pickFiles);
+    await ctrl.setOnShowFileSelector(_pickFiles);
 
     final AndroidWebViewCookieManager cookies =
         AndroidWebViewCookieManager(
@@ -237,7 +359,19 @@ class _WebShellState extends State<WebShell>
         const PlatformWebViewCookieManagerCreationParams(),
       ),
     );
-    cookies.setAcceptThirdPartyCookies(ctrl, true);
+    await cookies.setAcceptThirdPartyCookies(ctrl, true);
+
+    final Map<String, Object> tuneArgs = <String, Object>{
+      'id': ctrl.webViewIdentifier,
+    };
+    for (int i = 0; i < 3; i++) {
+      try {
+        final bool? ok =
+            await _uploadBridge.invokeMethod<bool>('tune_webview', tuneArgs);
+        if (ok == true) break;
+      } catch (_) {}
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+    }
   }
 
   Future<List<String>> _pickFiles(FileSelectorParams params) async {
@@ -294,7 +428,7 @@ class _WebShellState extends State<WebShell>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _dropTimer?.cancel();
-    _rotateVeilTimer?.cancel();
+    _loadWatchdog?.cancel();
     _connSub?.cancel();
     unawaited(_setImeOverlay(false));
     widget.pushGate.onWarmUrl = null;
@@ -305,26 +439,31 @@ class _WebShellState extends State<WebShell>
     super.dispose();
   }
 
-  void _onOrientationChange(Orientation next) {
-    if (_lastOrientation == null) {
-      _lastOrientation = next;
-      return;
+  EdgeInsets _safePad(MediaQueryData mq) {
+    final EdgeInsets vp = mq.viewPadding;
+    final bool land = mq.orientation == Orientation.landscape;
+    // Same policy as Towerbound (glass_deck / StreamPortal):
+    //   portrait  → top safe-area only (camera notch).
+    //   landscape → left + right safe-area only.
+    // Bottom stays 0. Intermediate inset frames are ignored by
+    // keeping the max value already seen for this orientation.
+    if (land) {
+      _padLandscape = EdgeInsets.only(
+        left: math.max(_padLandscape.left, vp.left),
+        right: math.max(_padLandscape.right, vp.right),
+      );
+    } else {
+      _padPortrait = EdgeInsets.only(
+        top: math.max(_padPortrait.top, vp.top),
+      );
     }
-    if (_lastOrientation == next) return;
-    _lastOrientation = next;
-    // The Android WebView surface briefly stretches while it
-    // reflows to the new size. Cover the transition with a
-    // matching-black veil so the user never sees the smeared
-    // frame; drop the veil once the native surface has settled.
-    if (mounted) setState(() => _rotating = true);
-    _rotateVeilTimer?.cancel();
-    _rotateVeilTimer = Timer(const Duration(milliseconds: 320), () {
-      if (mounted) setState(() => _rotating = false);
-    });
+    return land ? _padLandscape : _padPortrait;
   }
 
   @override
   Widget build(BuildContext context) {
+    final MediaQueryData mq = MediaQuery.of(context);
+    final EdgeInsets pad = _safePad(mq);
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (bool didPop, _) async {
@@ -333,66 +472,28 @@ class _WebShellState extends State<WebShell>
       child: Scaffold(
         backgroundColor: Colors.black,
         resizeToAvoidBottomInset: false,
-        body: OrientationBuilder(
-          builder: (BuildContext ctx, Orientation orientation) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _onOrientationChange(orientation);
-            });
-            final MediaQueryData mq = MediaQuery.of(context);
-            final bool landscape = orientation == Orientation.landscape;
-            // Top notch always needs an inset — without it the
-            // status bar / cutout eats the site's header. In
-            // landscape both long edges also need an inset for
-            // the punch-hole. Bottom stays edge-to-edge because
-            // we run under a transparent system nav.
-            final EdgeInsets safe = landscape
-                ? EdgeInsets.only(
-                    top: mq.viewPadding.top,
-                    left: mq.viewPadding.left,
-                    right: mq.viewPadding.right,
-                  )
-                : EdgeInsets.only(top: mq.viewPadding.top);
-            return Stack(
-              fit: StackFit.expand,
-              children: <Widget>[
-                const ColoredBox(color: Colors.black),
-                Padding(
-                  padding: safe,
-                  child: WebViewWidget(controller: _wv),
-                ),
-                AnimatedOpacity(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOut,
-                  opacity: _rotating ? 1.0 : 0.0,
-                  child: IgnorePointer(
-                    ignoring: !_rotating,
-                    child: const ColoredBox(
-                      color: Colors.black,
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.4,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Color(0xFFF5C542),
-                          ),
-                        ),
-                      ),
+        body: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            const ColoredBox(color: Colors.black),
+            Padding(
+              padding: pad,
+              child: RepaintBoundary(
+                child: WebViewWidget(controller: _wv),
+              ),
+            ),
+            if (_spinner)
+              const ColoredBox(
+                color: Color(0x66000000),
+                child: Center(
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Color(0xFFF5C542),
                     ),
                   ),
                 ),
-                if (_spinner)
-                  const ColoredBox(
-                    color: Color(0x66000000),
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Color(0xFFF5C542),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          },
+              ),
+          ],
         ),
       ),
     );

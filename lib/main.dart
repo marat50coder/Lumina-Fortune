@@ -16,6 +16,10 @@ import 'prism/shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // ignore: avoid_print
+  print('[LF/MAIN] boot');
+  // Background push handler must be registered before the first
+  // frame — it is instant, no await needed.
   FirebaseMessaging.onBackgroundMessage(prismBgPush);
 
   SystemChrome.setPreferredOrientations(DeviceOrientation.values);
@@ -26,20 +30,7 @@ Future<void> main() async {
   ));
 
   final LinkGauge gauge = LinkGauge();
-  bool startOffline = false;
-  try {
-    startOffline = await gauge
-        .isDefinitelyOffline()
-        .timeout(const Duration(milliseconds: 900));
-  } catch (_) {
-    startOffline = false;
-  }
-
   final LocalVault vault = LocalVault();
-  try {
-    await vault.warm().timeout(const Duration(seconds: 2));
-  } catch (_) {}
-
   final PushGate pushGate = PushGate(vault);
   final TrackerBureau bureau = TrackerBureau();
   final PrismDispatcher dispatcher = PrismDispatcher(
@@ -49,6 +40,26 @@ Future<void> main() async {
     endpoint: RulingEndpoint(vault),
     pushGate: pushGate,
   );
+
+  // SharedPreferences warms in <100 ms on a healthy device.
+  // A longer window just idled the system splash before the
+  // warmup screen had a chance to render anything.
+  try {
+    await vault.warm().timeout(const Duration(milliseconds: 500));
+  } catch (_) {}
+
+  // One quick adapter check — no retry. If it is ambiguous we
+  // continue optimistically; the dispatcher runs a real DNS
+  // probe once the warmup screen is up anyway, so a second
+  // check here was pure latency on the system splash.
+  bool startOffline = false;
+  try {
+    startOffline = await gauge
+        .isDefinitelyOffline()
+        .timeout(const Duration(milliseconds: 350));
+  } catch (_) {}
+  // ignore: avoid_print
+  print('[LF/MAIN] startOffline=$startOffline');
 
   if (startOffline) {
     runApp(LuminaShell(
@@ -60,22 +71,29 @@ Future<void> main() async {
     return;
   }
 
-  FirebaseMessaging.onBackgroundMessage(prismBgPush);
-  try {
-    if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp().timeout(const Duration(seconds: 6));
-    }
-  } catch (_) {}
-
-  try {
-    await UaForger.prime().timeout(const Duration(seconds: 3));
-  } catch (_) {}
-  unawaited(bureau.start());
-  unawaited(pushGate.ignite());
+  // Firebase.initializeApp + UaForger.prime used to block here
+  // for up to 9 s before the first frame. Both are idempotent
+  // and have safe fallbacks:
+  //   • Firebase.initializeApp is called again inside
+  //     pushGate.ignite() during dispatcher.resolve.
+  //   • UaForger has a code-unit seed fallback, and the WebView
+  //     reads the cached value lazily on first use.
+  // Running them unawaited lets runApp fire immediately so the
+  // warmup screen replaces the system splash within ~100 ms.
+  unawaited(_warmFirebase());
+  unawaited(UaForger.prime());
 
   runApp(LuminaShell(
     dispatcher: dispatcher,
     vault: vault,
     pushGate: pushGate,
   ));
+}
+
+Future<void> _warmFirebase() async {
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp();
+    }
+  } catch (_) {}
 }

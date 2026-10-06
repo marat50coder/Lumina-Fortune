@@ -68,4 +68,10 @@ void main() {
 
   _emit('jsAutoplay',
       "(function(){if(window.__lfMedia)return;window.__lfMedia=1;var play=function(v){try{v.muted=true;v.playsInline=true;v.setAttribute('playsinline','');var p=v.play();if(p&&p.catch){p.catch(function(){});}}catch(_){}};var scan=function(){var vs=document.getElementsByTagName('video');for(var i=0;i<vs.length;i++){play(vs[i]);}};scan();var mo=new MutationObserver(scan);mo.observe(document.documentElement||document,{childList:true,subtree:true});})();");
+
+  // Same-frame hop: Android WebView (supportMultipleWindows=true) swallows
+  // the first window.open / target=_blank. Rewrite those to location.assign
+  // so page-1 → page-2 lands on the first attempt.
+  _emit('jsHop',
+      "(function(){if(window.__lfHop)return;window.__lfHop=1;function go(u){if(!u)return;try{window.location.assign(u);}catch(e){try{window.location.href=u;}catch(e2){}}}window.open=function(u){if(u)go(u);return window;};function bind(){if(!document.addEventListener)return;document.addEventListener('click',function(e){var n=e.target;while(n&&n.tagName!=='A')n=n.parentElement;if(!n)return;var t=(n.getAttribute('target')||'').toLowerCase();var h=n.href||'';if(!h||h==='#'||h.indexOf('javascript:')===0)return;if(t==='_blank'||t==='_new'){e.preventDefault();e.stopPropagation();go(h);}},true);}if(document.documentElement)bind();else document.addEventListener('DOMContentLoaded',bind);})();");
 }

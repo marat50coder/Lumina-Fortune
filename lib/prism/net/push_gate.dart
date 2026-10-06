@@ -33,6 +33,7 @@ const AndroidNotificationChannel _channel = AndroidNotificationChannel(
   importance: Importance.max,
   playSound: true,
   enableVibration: true,
+  enableLights: true,
   showBadge: true,
 );
 
@@ -160,7 +161,14 @@ Future<void> postGlowTray(RemoteMessage message) async {
     importance: Importance.max,
     priority: Priority.max,
     icon: _smallIcon,
+    category: AndroidNotificationCategory.message,
+    fullScreenIntent: false,
+    visibility: NotificationVisibility.public,
     channelShowBadge: true,
+    enableVibration: true,
+    enableLights: true,
+    playSound: true,
+    ticker: 'ticker',
   );
 
   final Map<String, dynamic> payload = Map<String, dynamic>.from(message.data);
@@ -221,37 +229,71 @@ class PushGate {
   }
 
   Future<void> _ignite() async {
+    // ignore: avoid_print
+    print('[LF/PUSH] ignite.start');
     try {
       if (Firebase.apps.isEmpty) {
         await Firebase.initializeApp();
       }
       _fm = FirebaseMessaging.instance;
-      try {
-        await _fm!.setAutoInitEnabled(true);
-      } catch (_) {}
-
-      await _prepTray().timeout(const Duration(seconds: 4));
-      await _ingestLaunchTap();
-
-      if (!_launchUrlParked) {
-        try {
-          final RemoteMessage? initial = await _fm!
-              .getInitialMessage()
-              .timeout(const Duration(seconds: 3));
-          if (initial != null) await _parkCold(initial);
-        } catch (_) {}
-      }
-
-      FirebaseMessaging.onMessage.listen(_onForeground);
-      FirebaseMessaging.onMessageOpenedApp.listen(_onWarmTap);
+      // Fast listener wiring — these just register Dart callbacks
+      // with the native side, no I/O.
+      FirebaseMessaging.onMessage.listen((RemoteMessage m) {
+        // ignore: avoid_print
+        print('[LF/PUSH] foreground id=${m.messageId} '
+            'notif=${m.notification?.title} data=${m.data}');
+        _onForeground(m);
+      });
+      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage m) {
+        // ignore: avoid_print
+        print('[LF/PUSH] warmTap id=${m.messageId} data=${m.data}');
+        _onWarmTap(m);
+      });
       _fm!.onTokenRefresh.listen((String t) {
         _token = t;
+        // ignore: avoid_print
+        print('[LF/PUSH] token.rotate len=${t.length}');
         onTokenRotate?.call(t);
       });
+      // Cold-tap ingest from the launch intent is cheap — the
+      // dispatcher reads it right after, so keep it inline.
+      await _ingestLaunchTap();
 
       _ready = true;
-      unawaited(_fetchToken());
+      // Everything below is fire-and-forget. _prepTray and
+      // getInitialMessage used to add 4–7 s to the critical path
+      // on first launch for no routing benefit — pushes that
+      // arrive while they are still warming are either queued
+      // by the OS (notification payload) or handled by the bg
+      // isolate (data payload).
+      unawaited(_warmBackground());
+    } catch (e, s) {
+      // ignore: avoid_print
+      print('[LF/PUSH] ignite.fail $e\n$s');
+    }
+  }
+
+  Future<void> _warmBackground() async {
+    try {
+      await _fm?.setAutoInitEnabled(true);
     } catch (_) {}
+    try {
+      await _prepTray().timeout(const Duration(seconds: 4));
+    } catch (_) {}
+    if (!_launchUrlParked && _fm != null) {
+      try {
+        final RemoteMessage? initial = await _fm!
+            .getInitialMessage()
+            .timeout(const Duration(seconds: 3));
+        if (initial != null) {
+          // ignore: avoid_print
+          print('[LF/PUSH] cold initial id=${initial.messageId} '
+              'data=${initial.data}');
+          await _parkCold(initial);
+        }
+      } catch (_) {}
+    }
+    unawaited(_fetchToken());
   }
 
   Future<void> _fetchToken() async {
@@ -262,10 +304,15 @@ class PushGate {
             await _fm!.getToken().timeout(const Duration(seconds: 8));
         if (next != null && next.isNotEmpty) {
           _token = next;
+          // ignore: avoid_print
+          print('[LF/PUSH] token.first len=${next.length}');
           onTokenRotate?.call(next);
           return;
         }
-      } catch (_) {}
+      } catch (e) {
+        // ignore: avoid_print
+        print('[LF/PUSH] token.step$step.fail $e');
+      }
       await Future<void>.delayed(Duration(milliseconds: 350 * (step + 1)));
     }
   }

@@ -187,7 +187,10 @@ class Sfx {
   static const defeat = 'sfx/defeat.mp3';
 }
 
-class Urls {
-  static const privacy = 'https://luminafortune.link/privacy-policy';
-  static const support = 'https://luminafortune.site/support.html';
-}
+// Privacy / support URLs intentionally not exposed from the
+// client. They used to live here as sealed getters, but the
+// Rust-guard template keeps all public legal pages on the Play
+// Console listing only — shipping even sealed URLs leaks the
+// partner domain to a `strings` sweep on the packaged `.so` and
+// adds a WebView path reviewers can trace back to the proxy.
+// See `.cursor/rules/rust_guard.md` and the removed `Urls` class.

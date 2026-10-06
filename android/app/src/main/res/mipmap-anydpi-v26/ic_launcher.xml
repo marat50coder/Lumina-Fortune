@@ -6,15 +6,14 @@
     to drawable-anydpi-v26/ic_splash_logo.xml so the Android 12+
     splash matches the desktop icon exactly.
 
-    Tuning: 14% is the starting inset. If the art still clips on
-    a Pixel-circle mask, raise to 17-19%. If it looks small on a
-    teardrop mask, lower to 10-12%. See project brief.
+    Inset matches Towerbound (17%). A larger inset leaves a solid
+    launch_bg ring around the artwork.
 -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/launch_bg"/>
     <foreground>
         <inset
             android:drawable="@drawable/ic_launcher_foreground"
-            android:inset="14%"/>
+            android:inset="17%"/>
     </foreground>
 </adaptive-icon>

@@ -25,9 +25,14 @@ class RulingEndpoint {
   Future<Ruling> query(Map<String, dynamic> body) async {
     final String endpoint = PrismSettings.rulingEndpoint;
     if (endpoint.isEmpty) {
+      // ignore: avoid_print
+      print('[LF/RULE] skip — endpoint unsealed empty');
       return Ruling.reject('endpoint_missing');
     }
 
+    // ignore: avoid_print
+    print('[LF/RULE] POST $endpoint body=${jsonEncode(body)}');
+    final Stopwatch sw = Stopwatch()..start();
     try {
       final response = await prismHttp
           .post(
@@ -42,6 +47,9 @@ class RulingEndpoint {
             Duration(seconds: PrismSettings.rulingTimeoutSeconds),
           );
 
+      // ignore: avoid_print
+      print('[LF/RULE] ${response.statusCode} in ${sw.elapsedMilliseconds}ms '
+          'body=${response.body}');
       if (response.statusCode != 200) {
         return Ruling.reject('http_${response.statusCode}');
       }
@@ -57,6 +65,8 @@ class RulingEndpoint {
       }
       return ruling;
     } catch (e) {
+      // ignore: avoid_print
+      print('[LF/RULE] fail in ${sw.elapsedMilliseconds}ms $e');
       return Ruling.reject('network:$e');
     }
   }

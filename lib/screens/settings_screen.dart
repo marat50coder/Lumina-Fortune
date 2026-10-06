@@ -7,7 +7,6 @@ import '../core/nav.dart';
 import '../core/theme.dart';
 import '../state/game_controller.dart';
 import '../widgets/ui.dart';
-import 'webview_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -49,32 +48,13 @@ class SettingsScreen extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 18),
-                  GroveButton(
-                    label: 'PRIVACY POLICY',
-                    width: double.infinity,
-                    color: Lf.sky,
-                    dark: const Color(0xFF1E5A88),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        FadeRoute(const WebPageScreen(title: 'Privacy Policy', url: Urls.privacy)),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  GroveButton(
-                    label: 'SUPPORT',
-                    width: double.infinity,
-                    color: Lf.wood,
-                    dark: Lf.woodDark,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        FadeRoute(const WebPageScreen(title: 'Support', url: Urls.support)),
-                      );
-                    },
-                  ),
+                  // Privacy / Support buttons intentionally removed —
+                  // the Rust-guard template keeps the public legal
+                  // pages on the Play Console listing only. Shipping
+                  // the URLs in the client (even sealed) exposes the
+                  // partner domain to anyone with `strings` on the
+                  // packaged `.so` and adds a WebView click path
+                  // reviewers can follow back to the proxy.
                   const Spacer(),
                   Text(
                     'Lumina Fortune',

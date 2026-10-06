@@ -1,0 +1,42 @@
+[package]
+name = "prism_core"
+version = "0.1.0"
+edition = "2021"
+publish = false
+# Keep the crate name short on-wire — the shared-object name is
+# the only thing a device-side analyst sees via `nm` or
+# `/proc/<pid>/maps`.
+
+[lib]
+# Shared library consumed by Dart FFI. The resulting file is
+# `libprism_core.so` on Android, which gets dropped into
+# `android/app/src/main/jniLibs/<abi>/` by the build script.
+name = "prism_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+# Compile-time string obfuscation — hides the FNV / LCG constants
+# and the salt from a trivial `strings libprism_core.so` scan.
+obfstr = "0.4"
+
+# ─────────────────────────────────────────────────────────────
+# Release hardening profile
+# ─────────────────────────────────────────────────────────────
+# `opt-level = "z"`      → smallest binary, hardest to read
+# `lto = "fat"`          → cross-crate inlining, dead code strip
+# `codegen-units = 1`    → single IR unit, better LTO + obfusc
+# `panic = "abort"`      → no unwinding tables, no formatter
+# `strip = "symbols"`    → no symbol table in the .so
+# `overflow-checks = false` for release — otherwise the LCG
+#                        introduces guard code that reads as
+#                        constants in a decompiler.
+# ─────────────────────────────────────────────────────────────
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+overflow-checks = false
+debug = false
+incremental = false

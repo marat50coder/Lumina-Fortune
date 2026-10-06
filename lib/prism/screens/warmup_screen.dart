@@ -79,7 +79,8 @@ class _WarmupScreenState extends State<WarmupScreen>
     if (!mounted || _landed) return;
     _landed = true;
     _fillTarget = 1;
-    await Future<void>.delayed(const Duration(milliseconds: 180));
+    // Just enough to let the fill animation visibly reach 100 %.
+    await Future<void>.delayed(const Duration(milliseconds: 90));
     if (!mounted) return;
 
     Widget next;
@@ -156,7 +157,9 @@ class _WarmupScreenState extends State<WarmupScreen>
     if (!mounted) return;
     if ((_fillShown - _fillTarget).abs() < 0.001) return;
     setState(() {
-      final double delta = (_fillTarget - _fillShown) * 0.09;
+      // Snappier creep so the bar visually keeps up with the
+      // fast-path pipeline (~5–8 s) instead of lagging behind.
+      final double delta = (_fillTarget - _fillShown) * 0.22;
       _fillShown =
           (_fillShown + delta).clamp(0.0, _fillTarget);
     });

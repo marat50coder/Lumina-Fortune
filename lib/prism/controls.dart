@@ -3,11 +3,9 @@ import 'package:flutter/material.dart';
 // ─────────────────────────────────────────────────────────────
 // PRISM CONTROLS — buttons for the gray-flow screens
 // ─────────────────────────────────────────────────────────────
-// Deliberately styled differently from the template's frosted-
-// blue relay pill AND from the white-part wooden buttons of the
-// native game. Warm gold pill for the primary action, deep-forest
-// outlined pill for the secondary — matches the Lumina Fortune
-// palette without reusing any asset from the game menu.
+// Styled to fit the Lumina Fortune palette without reusing any
+// asset from the game menu: a warm gold pill for the primary
+// action and a deep-forest outlined pill for the secondary.
 //
 // Every label uses `height: 1.0` and `CrossAxisAlignment.center`
 // to defeat baseline drift (see pitfalls doc §13). Skip buttons

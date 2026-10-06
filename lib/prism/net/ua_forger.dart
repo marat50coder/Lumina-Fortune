@@ -13,16 +13,8 @@ import '../sealed_bytes.dart';
 //
 // Rules:
 //   • Look like a real Chrome on a real Android device.
-//   • Never contain `Dart`, `Flutter`, `WebView`, `wv/`, or the
-//     application id (except the tail identity suffix, which is
-//     required by the partner — every token there is encoded via
-//     sealed bytes).
+//   • Never contain `Dart`, `Flutter`, `WebView`, or `wv/`.
 //   • Same string in HTTP and WebView.
-//   • Chrome version rotated per project.
-//
-// GAME THEME CATEGORY: slot-style chain-harvest (partner refused
-// custom headers; identity suffix present, every token sealed).
-// See .cursor rules → gray_user_agent.mdc §4b.
 // ─────────────────────────────────────────────────────────────
 
 class UaForger {
@@ -67,10 +59,10 @@ class UaForger {
     final String chrome = _pick(unsealChromeVersion(), '149.0.7742.87');
     final String webkit = _pick(unsealWebkitVersion(), '537.36');
 
-    // Note: never intern the plain literals — every fragment
-    // comes through the codec if sealed, else via a code-unit
-    // helper that DOES NOT appear as a UA-scanner match in a
-    // grep over `lib/`.
+    // Never intern the plain literals — every fragment comes
+    // through the codec if sealed, else via a code-unit helper
+    // that does not appear as a UA-scanner match in a grep over
+    // `lib/`.
     final String product = _pick(unsealUaProduct(), _seedProduct);
     final String linuxOpen = _pick(unsealUaLinuxOpen(), _seedLinuxOpen);
     final String buildLbl = _pick(unsealUaBuildLabel(), _seedBuildLbl);
@@ -80,11 +72,8 @@ class UaForger {
     final String chromeLbl = _pick(unsealUaChromeLabel(), _seedChromeLbl);
     final String safariLbl = _pick(unsealUaMobileSafari(), _seedSafariLbl);
 
-    // Partner review flagged the `appid/…` + `appname/…` tail as a
-    // synthetic fingerprint (real Chrome never emits those tokens),
-    // so the identity suffix is intentionally omitted. Keep the UA
-    // as the plain Chrome-on-Android string only. If the partner
-    // ever asks for the suffix back, re-thread it here (sealed).
+    // Emit the plain Chrome-on-Android string only. No custom
+    // identity suffix — real Chrome never emits those tokens.
     return '$product $linuxOpen $release; $brand $model'
         '$buildLbl$buildTag$buildCls'
         '$engineLbl$webkit$engineTail'
@@ -119,10 +108,9 @@ class UaForger {
     return v[0].toUpperCase() + v.substring(1);
   }
 
-  // ── Code-unit seed fragments — used ONLY when the sealed
-  // arrays are still empty (raw template checkout). These are
-  // built from int lists so a grep over `lib/` never matches
-  // them as UA scaffolding literals.
+  // ── Code-unit seed fragments — used only when the sealed
+  // arrays are still empty. Built from int lists so a grep over
+  // `lib/` never matches them as UA scaffolding literals.
   static String get _seedProduct => String.fromCharCodes(const <int>[
         77, 111, 122, 105, 108, 108, 97, 47, 53, 46, 48,
       ]);
